@@ -1,0 +1,50 @@
+cart:
+  app:
+    persistence:
+      provider: dynamodb
+  dynamodb:
+    create: true
+
+catalog:
+  app:
+    persistence:
+      provider: mysql
+  mysql:
+    create: true
+    persistentVolume:
+      enabled: false
+
+checkout:
+  app:
+    persistence:
+      provider: redis
+    endpoints:
+      orders: http://orders:80
+  redis:
+    create: true
+
+orders:
+  app:
+    persistence:
+      provider: postgres
+      endpoint: "YOUR_RDS_ENDPOINT:5432"
+      database: orders
+      secret:
+        create: false
+        name: orders-db
+
+    messaging:
+      provider: in-memory
+      rabbitmq:
+        secret:
+          create: false
+
+  postgresql:
+    create: false
+
+  rabbitmq:
+    create: false
+
+ui:
+  service:
+    type: LoadBalancer

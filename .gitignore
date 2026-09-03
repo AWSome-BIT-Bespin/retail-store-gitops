@@ -1,0 +1,22 @@
+# Helm dependency build/update로 생성되는 패키지
+/src/app/chart/charts/
+
+# 비밀번호가 포함된 로컬 설정
+*.secret.yaml
+*.secret.yml
+*.private.yaml
+.env
+.env.*
+!.env.example
+
+# 로그 및 임시 파일
+*.log
+*.tmp
+*.swp
+*~
+
+# IDE 및 운영체제 파일
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
