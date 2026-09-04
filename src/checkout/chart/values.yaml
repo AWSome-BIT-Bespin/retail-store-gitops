@@ -41,10 +41,10 @@ service:
 
 resources:
   limits:
-    memory: 256Mi
+    memory: 128Mi
   requests:
-    cpu: 128m
-    memory: 256Mi
+    cpu: 64m
+    memory: 128Mi
 
 autoscaling:
   enabled: false
