@@ -23,7 +23,7 @@ orders:
   app:
     persistence:
       provider: postgres
-      endpoint: "YOUR_RDS_ENDPOINT:5432"
+      endpoint: "retail-test-orders.cmnrhpznom2o.ap-northeast-2.rds.amazonaws.com:5432"
       database: orders
       secret:
         create: false
