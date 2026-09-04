@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: public.ecr.aws/aws-containers/retail-store-sample-catalog
+  repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-catalog
   pullPolicy: IfNotPresent
   tag: 
 
