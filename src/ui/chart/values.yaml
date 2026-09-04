@@ -109,6 +109,7 @@ ingress:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
+    alb.ingress.kubernetes.io/subnets: "subnet-0ee68c3db966fa894,subnet-0f48b01ab99b2d7d3"
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
