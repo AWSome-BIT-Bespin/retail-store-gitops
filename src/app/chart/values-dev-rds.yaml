@@ -1,18 +1,14 @@
 cart:
   app:
     persistence:
-      provider: dynamodb
-  dynamodb:
-    create: true
+      provider: in-memory
+
 
 catalog:
   app:
     persistence:
-      provider: mysql
-  mysql:
-    create: true
-    persistentVolume:
-      enabled: false
+      provider: in-memory
+
 
 checkout:
   app:
@@ -40,11 +36,14 @@ orders:
           create: false
 
   postgresql:
-    create: false
+    create: true
 
   rabbitmq:
     create: false
 
 ui:
   service:
-    type: LoadBalancer
+    type: ClusterIP
+  ingress:
+    enabled: true
+    className: alb
