@@ -36,7 +36,7 @@ orders:
           create: false
 
   postgresql:
-    create: true
+    create: false
 
   rabbitmq:
     create: false
