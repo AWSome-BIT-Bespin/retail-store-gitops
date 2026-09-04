@@ -105,6 +105,7 @@ ingress:
   enabled: true
   className: alb
   annotations:
+    alb.ingress.kubernetes.io/load-balancer-name: retail-store-alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
