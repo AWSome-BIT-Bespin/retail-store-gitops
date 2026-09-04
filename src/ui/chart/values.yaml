@@ -24,7 +24,7 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext:
+podSecurityContext:    # 
   fsGroup: 1000
 
 securityContext:
@@ -102,12 +102,12 @@ app:
 
 ## Ingress for load balancer
 ingress:
-  enabled: false
-  # className: ""
-  annotations: {}
-  #   alb.ingress.kubernetes.io/scheme: internet-facing
-  #   alb.ingress.kubernetes.io/target-type: ip
-  #   alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -115,15 +115,14 @@ ingress:
   hosts: []
   #  - "chart-example.local"
 
-ingresses: []
+#ingresses: []
   # - name: default
   #   className: ""
   #   hosts: []
   #   annotations: {}
   #   tls: []
 
-ingresses:
-  []
+#ingresses: []
   # - name: default
   #   className: ""
   #   hosts: []
