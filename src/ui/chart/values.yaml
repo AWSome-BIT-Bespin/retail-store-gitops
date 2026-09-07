@@ -7,7 +7,7 @@ replicaCount: 1
 image:
   repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-ui
   pullPolicy: IfNotPresent
-  tag: 
+  tag:
 
 imagePullSecrets: []
 nameOverride: ""
@@ -24,7 +24,7 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext:    # 
+podSecurityContext: #
   fsGroup: 1000
 
 securityContext:
@@ -46,16 +46,16 @@ service:
 
 resources:
   limits:
-    memory: 256Mi
+    memory: 512Mi
   requests:
     cpu: 128m
     memory: 256Mi
 
 autoscaling:
   enabled: true
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 5
-  targetCPUUtilizationPercentage: 40
+  targetCPUUtilizationPercentage: 80
 
 nodeSelector: {}
 
@@ -63,7 +63,19 @@ tolerations: []
 
 affinity: {}
 
-topologySpreadConstraints: []
+topologySpreadConstraints:
+  # Spread replicas of the same app and Helm release across at least two nodes.
+  - maxSkew: 1
+    minDomains: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    nodeTaintsPolicy: Honor
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: service
+    matchLabelKeys:
+      - app.kubernetes.io/name
+      - app.kubernetes.io/instance
 
 metrics:
   enabled: true
@@ -118,18 +130,18 @@ ingress:
   #  - "chart-example.local"
 
 #ingresses: []
-  # - name: default
-  #   className: ""
-  #   hosts: []
-  #   annotations: {}
-  #   tls: []
+# - name: default
+#   className: ""
+#   hosts: []
+#   annotations: {}
+#   tls: []
 
 #ingresses: []
-  # - name: default
-  #   className: ""
-  #   hosts: []
-  #   annotations: {}
-  #   tls: []
+# - name: default
+#   className: ""
+#   hosts: []
+#   annotations: {}
+#   tls: []
 
 istio:
   enabled: false
@@ -141,5 +153,5 @@ opentelemetry:
 
 podDisruptionBudget:
   enabled: false
-  minAvailable: 2
+  minAvailable: 1
   maxUnavailable: 1

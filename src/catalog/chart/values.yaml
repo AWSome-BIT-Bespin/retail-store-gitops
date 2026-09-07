@@ -7,7 +7,7 @@ replicaCount: 1
 image:
   repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-catalog
   pullPolicy: IfNotPresent
-  tag: 
+  tag:
 
 imagePullSecrets: []
 nameOverride: ""
@@ -43,12 +43,12 @@ resources:
   limits:
     memory: 128Mi
   requests:
-    cpu: 128m
-    memory: 128Mi
+    cpu: 25m
+    memory: 32Mi
 
 autoscaling:
-  enabled: false
-  minReplicas: 1
+  enabled: true
+  minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
@@ -59,7 +59,19 @@ tolerations: []
 
 affinity: {}
 
-topologySpreadConstraints: []
+topologySpreadConstraints:
+  # Spread replicas of the same app and Helm release across at least two nodes.
+  - maxSkew: 1
+    minDomains: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    nodeTaintsPolicy: Honor
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: service
+    matchLabelKeys:
+      - app.kubernetes.io/name
+      - app.kubernetes.io/instance
 
 metrics:
   enabled: true
@@ -83,7 +95,7 @@ app:
       name: catalog-db
       username: catalog
       password: ""
-  
+
   search:
     enabled: false
     provider: self-hosted
@@ -122,7 +134,6 @@ mysql:
     storageClass: ""
 
 opensearch:
-  
   image:
     repository: opensearchproject/opensearch
     pullPolicy: IfNotPresent

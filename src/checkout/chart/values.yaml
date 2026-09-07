@@ -7,11 +7,11 @@ replicaCount: 1
 image:
   repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-checkout
   pullPolicy: IfNotPresent
-  tag: 
+  tag:
 
 imagePullSecrets: []
-nameOverride: ''
-fullnameOverride: ''
+nameOverride: ""
+fullnameOverride: ""
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -20,7 +20,7 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ''
+  name: ""
 
 podAnnotations: {}
 
@@ -41,14 +41,14 @@ service:
 
 resources:
   limits:
-    memory: 128Mi
+    memory: 256Mi
   requests:
     cpu: 64m
     memory: 128Mi
 
 autoscaling:
-  enabled: false
-  minReplicas: 1
+  enabled: true
+  minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
@@ -59,14 +59,26 @@ tolerations: []
 
 affinity: {}
 
-topologySpreadConstraints: []
+topologySpreadConstraints:
+  # Spread replicas of the same app and Helm release across at least two nodes.
+  - maxSkew: 1
+    minDomains: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    nodeTaintsPolicy: Honor
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: service
+    matchLabelKeys:
+      - app.kubernetes.io/name
+      - app.kubernetes.io/instance
 
 metrics:
   enabled: true
   podAnnotations:
-    prometheus.io/scrape: 'true'
-    prometheus.io/port: '8080'
-    prometheus.io/path: '/metrics'
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
 
 configMap:
   create: true
@@ -74,13 +86,13 @@ configMap:
 
 app:
   persistence:
-    provider: 'in-memory'
+    provider: "in-memory"
     redis:
-      endpoint: ''
+      endpoint: ""
       tls: false
 
   endpoints:
-    orders: ''
+    orders: ""
 
 redis:
   create: false
@@ -88,7 +100,7 @@ redis:
   image:
     repository: redis
     pullPolicy: IfNotPresent
-    tag: '6.0-alpine'
+    tag: "6.0-alpine"
 
   service:
     type: ClusterIP
@@ -109,7 +121,7 @@ securityGroups:
 
 opentelemetry:
   enabled: false
-  instrumentation: ''
+  instrumentation: ""
 
 podDisruptionBudget:
   enabled: false
