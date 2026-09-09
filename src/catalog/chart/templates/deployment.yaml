@@ -20,7 +20,7 @@ spec:
       {{- if or .Values.podAnnotations .Values.metrics.enabled }}
       annotations:
         {{- include "catalog.podAnnotations" . | nindent 8 }}
-        {{- if and .Values.opentelemetry.enabled .Values.opentelemetry.instrumentation }}
+        {{- if and .Values.opentelemetry.enabled .Values.opentelemetry.instrumentation (not .Values.whatap.enabled) }}
         instrumentation.opentelemetry.io/inject-sdk: {{ .Values.opentelemetry.instrumentation }}
         {{- end }}
       {{- end }}
@@ -47,6 +47,27 @@ spec:
             - secretRef:
                 name: {{ .Values.app.persistence.secret.name }}
             {{- end }}
+          {{- if .Values.whatap.enabled }}
+          env:
+            # 기존 OpenTelemetry와 중복 계측되지 않게 합니다.
+            - name: OTEL_ENABLED
+              value: "false"
+            # emptyDir에 설정 파일과 로그를 기록합니다.
+            - name: WHATAP_HOME
+              value: "/whatap"
+            # 실제 키는 같은 namespace의 Secret에서만 읽습니다.
+            - name: WHATAP_LICENSE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "whatap.secretName is required when whatap.enabled=true" .Values.whatap.secretName | quote }}
+                  key: license
+            - name: WHATAP_SERVER_HOST
+              value: {{ required "whatap.serverHost is required when whatap.enabled=true" .Values.whatap.serverHost | quote }}
+            - name: WHATAP_APP_NAME
+              value: {{ .Values.whatap.appName | quote }}
+            - name: WHATAP_OKIND
+              value: {{ .Values.whatap.okind | quote }}
+          {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.Version }}"
@@ -64,10 +85,18 @@ spec:
           volumeMounts:
             - mountPath: /tmp
               name: tmp-volume
+            {{- if .Values.whatap.enabled }}
+            - mountPath: /whatap
+              name: whatap-home
+            {{- end }}
       volumes:
         - name: tmp-volume
           emptyDir:
             medium: Memory
+        {{- if .Values.whatap.enabled }}
+        - name: whatap-home
+          emptyDir: {}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

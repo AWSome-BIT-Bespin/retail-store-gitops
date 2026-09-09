@@ -121,8 +121,14 @@ securityGroups:
 
 opentelemetry:
   enabled: false
-  instrumentation: ""
+  instrumentation: ''
 
+whatap:
+  enabled: true
+  secretName: ''
+  serverHost: ''
+  okind: checkout
+  
 podDisruptionBudget:
   enabled: false
   minAvailable: 2

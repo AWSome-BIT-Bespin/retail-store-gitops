@@ -164,6 +164,14 @@ securityGroups:
   create: false
   securityGroupIds: []
 
+whatap:
+  # Secret과 수집 서버 주소를 넣기 전까지는 false로 유지합니다.
+  enabled: false
+  secretName: ""
+  serverHost: ""
+  appName: "catalog"
+  okind: "catalog"
+
 opentelemetry:
   enabled: false
   instrumentation: ""

@@ -20,7 +20,7 @@ spec:
       {{- if or .Values.podAnnotations .Values.metrics.enabled }}
       annotations:
         {{- include "checkout.podAnnotations" . | nindent 8 }}
-        {{- if and .Values.opentelemetry.enabled .Values.opentelemetry.instrumentation }}
+        {{- if and .Values.opentelemetry.enabled .Values.opentelemetry.instrumentation (not .Values.whatap.enabled) }}
         instrumentation.opentelemetry.io/inject-sdk: {{ .Values.opentelemetry.instrumentation }}
         {{- end }}
       {{- end }}
@@ -43,6 +43,36 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "checkout.configMapName" . }}
+          {{- if .Values.whatap.enabled }}
+          env:
+            - name: OTEL_ENABLED
+              value: "false"
+            - name: WHATAP_HOME
+              value: /whatap
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WHATAP_OKIND
+              value: {{ .Values.whatap.okind | quote }}
+            - name: WHATAP_LICENSE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "whatap.secretName is required when whatap.enabled=true" .Values.whatap.secretName | quote }}
+                  key: license
+            - name: WHATAP_SERVER_HOST
+              value: {{ required "whatap.serverHost is required when whatap.enabled=true" .Values.whatap.serverHost | quote }}
+            - name: WHATAP_MICRO_ENABLED
+              value: "true"
+          {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.Version }}"
@@ -60,10 +90,18 @@ spec:
           volumeMounts:
             - mountPath: /tmp
               name: tmp-volume
+            {{- if .Values.whatap.enabled }}
+            - mountPath: /whatap
+              name: whatap-volume
+            {{- end }}
       volumes:
         - name: tmp-volume
           emptyDir:
             medium: Memory
+        {{- if .Values.whatap.enabled }}
+        - name: whatap-volume
+          emptyDir: {}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -48,6 +48,11 @@ data:
   {{- if .Values.app.endpoints.assets }}
   RETAIL_UI_ENDPOINTS_ASSETS: {{ .Values.app.endpoints.assets }}
   {{- end }}
+  {{- if .Values.app.session.redis.endpoint }}
+  SPRING_SESSION_STORE_TYPE: redis
+  SPRING_DATA_REDIS_URL: redis://{{ .Values.app.session.redis.endpoint }}
+  SPRING_SESSION_REDIS_NAMESPACE: retail:ui:session
+  {{- end }}
   RETAIL_UI_SEARCH_ENABLED: "{{ .Values.app.search.enabled }}"
 
 {{- end }}

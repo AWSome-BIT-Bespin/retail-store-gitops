@@ -48,7 +48,7 @@ resources:
   limits:
     memory: 512Mi
   requests:
-    cpu: 128m
+    cpu: 64m
     memory: 256Mi
 
 autoscaling:
@@ -96,6 +96,9 @@ app:
     #orders: http://orders:80
     #checkout: http://checkout:80
     #recommendations: http://recommendations:80
+  session:
+    redis:
+      endpoint: ""
   search:
     enabled: false
   chat:
