@@ -1,13 +1,23 @@
 cart:
   app:
     persistence:
-      provider: in-memory
+      provider: dynamodb
+      dynamodb:
+        tableName: retail-test-cart
+        createTable: false
+  dynamodb:
+    create: false
+
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::350606136784:role/RetailTestCartDynamoDBRole
 
 
 catalog:
   app:
     persistence:
       provider: in-memory
+
 
 
 checkout:
@@ -17,7 +27,10 @@ checkout:
     endpoints:
       orders: http://orders:80
   redis:
-    create: true
+    create: false
+
+  whatap:
+    enabled: false
 
 orders:
   app:
@@ -35,6 +48,7 @@ orders:
         secret:
           create: false
 
+
   postgresql:
     create: false
 
@@ -47,3 +61,7 @@ ui:
   ingress:
     enabled: true
     className: alb
+  app:
+    session:
+      redis:
+        endpoint: retail-test-redis.lk6esl.ng.0001.apn2.cache.amazonaws.com:6379

@@ -1,0 +1,19 @@
+cart:
+  image:
+    tag: "v0.0.2"
+
+catalog:
+  image:
+    tag: "v0.0.2"
+
+checkout:
+  image:
+    tag: "v0.0.3"
+
+orders:
+  image:
+    tag: "v0.1.1"
+
+ui:
+  image:
+    tag: "v0.1.6"
