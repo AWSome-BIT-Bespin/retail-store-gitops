@@ -24,6 +24,9 @@ checkout:
   app:
     persistence:
       provider: redis
+      redis:
+        endpoint: retailstore-valkey-001.lk6esl.0001.apn2.cache.amazonaws.com:6379
+        tls: false
     endpoints:
       orders: http://orders:80
   redis:
@@ -36,7 +39,7 @@ orders:
   app:
     persistence:
       provider: postgres
-      endpoint: "retail-infra-postgres.cmnrhpznom2o.ap-northeast-2.rds.amazonaws.com:5432"
+      endpoint: "retail-infra-postgres.cmnrhpznom2o.ap-northeast-2.rds.amazonaws.com"
       database: orders
       secret:
         create: false
@@ -64,4 +67,5 @@ ui:
   app:
     session:
       redis:
-        endpoint: retail-test-redis.lk6esl.ng.0001.apn2.cache.amazonaws.com:6379
+        endpoint: retailstore-valkey-001.lk6esl.0001.apn2.cache.amazonaws.com:6379
+        tls: false
