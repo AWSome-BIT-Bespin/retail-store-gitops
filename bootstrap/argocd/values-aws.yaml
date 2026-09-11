@@ -1,0 +1,12 @@
+# Pinned install contract:
+#   Helm chart: argo-cd 10.2.1
+#   Argo CD: v3.4.5
+# This file prepares only the initial AWS bootstrap installation.
+server:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+
+redis-ha:
+  enabled: false

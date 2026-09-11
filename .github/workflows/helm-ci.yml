@@ -41,3 +41,44 @@ jobs:
           -f ./src/app/chart/values-dev-rds.yaml
           -f ./src/app/chart/versions.yaml
           --output-dir "$RUNNER_TEMP/retail-store-gitops-ci-rendered"
+
+  argocd-bootstrap-validate:
+    name: Validate Argo CD bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.3
+
+      - name: Add Argo CD Helm repository
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+
+      - name: Pull pinned Argo CD chart
+        run: |
+          helm pull argo/argo-cd \
+            --version 10.2.1 \
+            --untar \
+            --untardir "$RUNNER_TEMP"
+
+      - name: Lint Argo CD bootstrap
+        run: >
+          helm lint "$RUNNER_TEMP/argo-cd"
+          --kube-version 1.36.0
+          -f ./bootstrap/argocd/values-aws.yaml
+
+      - name: Render Argo CD bootstrap
+        run: >
+          helm template argocd "$RUNNER_TEMP/argo-cd"
+          --namespace argocd
+          --kube-version 1.36.0
+          --include-crds
+          -f ./bootstrap/argocd/values-aws.yaml
+          --output-dir "$RUNNER_TEMP/argocd-bootstrap-rendered"
