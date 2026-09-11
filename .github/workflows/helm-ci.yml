@@ -1,0 +1,43 @@
+name: GitOps Helm CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  helm-validate:
+    name: Validate Helm chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.3
+
+      - name: Show Helm version
+        run: helm version --short
+
+      - name: Build Helm dependencies
+        run: helm dependency build ./src/app/chart
+
+      - name: Lint Helm chart
+        run: >
+          helm lint ./src/app/chart
+          --with-subcharts
+          -f ./src/app/chart/values-dev-rds.yaml
+          -f ./src/app/chart/versions.yaml
+
+      - name: Render Helm chart
+        run: >
+          helm template retail-store ./src/app/chart
+          -f ./src/app/chart/values-dev-rds.yaml
+          -f ./src/app/chart/versions.yaml
+          --output-dir "$RUNNER_TEMP/retail-store-gitops-ci-rendered"
