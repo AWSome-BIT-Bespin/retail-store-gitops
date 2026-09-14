@@ -3,29 +3,26 @@ cart:
     persistence:
       provider: dynamodb
       dynamodb:
-        tableName: retail-test-cart
+        tableName: retail-store-cart
         createTable: false
   dynamodb:
     create: false
 
   serviceAccount:
     annotations:
-      eks.amazonaws.com/role-arn: arn:aws:iam::350606136784:role/RetailTestCartDynamoDBRole
-
+      eks.amazonaws.com/role-arn: []
 
 catalog:
   app:
     persistence:
       provider: in-memory
 
-
-
 checkout:
   app:
     persistence:
       provider: redis
       redis:
-        endpoint: retailstore-valkey-001.lk6esl.0001.apn2.cache.amazonaws.com:6379
+        endpoint: []
         tls: false
     endpoints:
       orders: http://orders:80
@@ -39,7 +36,7 @@ orders:
   app:
     persistence:
       provider: postgres
-      endpoint: "retail-infra-postgres.cmnrhpznom2o.ap-northeast-2.rds.amazonaws.com"
+      endpoint: ""
       database: orders
       secret:
         create: false
@@ -50,7 +47,6 @@ orders:
       rabbitmq:
         secret:
           create: false
-
 
   postgresql:
     create: false

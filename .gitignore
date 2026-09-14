@@ -1,5 +1,7 @@
 # Helm dependency build/update로 생성되는 패키지
 /src/app/chart/charts/
+/bootstrap/external-secrets/
+/docs/
 
 # 비밀번호가 포함된 로컬 설정
 *.secret.yaml

@@ -74,11 +74,11 @@ topologySpreadConstraints:
       - app.kubernetes.io/instance
 
 metrics:
-  enabled: true
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
-    prometheus.io/path: "/metrics"
+  enabled: false
+  #podAnnotations:
+  # prometheus.io/scrape: "true"
+  #prometheus.io/port: "8080"
+  #prometheus.io/path: "/metrics"
 
 configMap:
   create: true
