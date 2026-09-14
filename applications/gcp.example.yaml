@@ -1,0 +1,21 @@
+# INPUT TEMPLATE ONLY; GKE cluster registration and data dependencies unverified.
+# Manual-sync proposal; do not enable automatic DR activation through this file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ""
+  namespace: ""
+spec:
+  project: ""
+  source:
+    repoURL: https://github.com/AWSome-BIT-Bespin/retail-store-gitops.git
+    targetRevision: main
+    path: src/app/chart
+    helm:
+      releaseName: ""
+      valueFiles:
+        - ../../../environments/gcp/values.yaml
+        - versions.yaml
+  destination:
+    name: ""
+    namespace: ""

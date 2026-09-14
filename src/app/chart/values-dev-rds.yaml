@@ -1,3 +1,5 @@
+# Legacy, incomplete environment file. See environments/aws/values.example.yaml
+# and runbooks/cd-inputs.md. Empty inputs are not deployment-ready.
 cart:
   app:
     persistence:
@@ -10,7 +12,7 @@ cart:
 
   serviceAccount:
     annotations:
-      eks.amazonaws.com/role-arn: []
+      eks.amazonaws.com/role-arn: ""
 
 catalog:
   app:
@@ -22,7 +24,7 @@ checkout:
     persistence:
       provider: redis
       redis:
-        endpoint: []
+        endpoint: ""
         tls: false
     endpoints:
       orders: http://orders:80

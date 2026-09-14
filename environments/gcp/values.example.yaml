@@ -1,0 +1,83 @@
+# INPUT TEMPLATE ONLY. GKE persistence and traffic entry are not decided.
+# GAR copies must match the verified ECR image digests for the same release.
+cart:
+  image:
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-cart
+  app:
+    persistence:
+      provider: "" # Decide the DR cart data design; no implicit in-memory fallback.
+  dynamodb:
+    create: false
+  serviceAccount:
+    # Current common defaults contain no IRSA annotation; CI guards against it.
+    annotations: {}
+
+catalog:
+  image:
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-catalog
+  app:
+    persistence:
+      provider: in-memory
+  whatap:
+    enabled: false
+    secretName: ""
+    serverHost: ""
+
+checkout:
+  image:
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-checkout
+  app:
+    persistence:
+      provider: redis
+      redis:
+        endpoint: ""
+        tls: false # Confirm the actual GCP Redis transport requirement.
+    endpoints:
+      orders: http://orders:80
+  redis:
+    create: false
+  whatap:
+    enabled: false
+    secretName: ""
+    serverHost: ""
+
+orders:
+  image:
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-orders
+  app:
+    persistence:
+      provider: postgres
+      endpoint: ""
+      database: orders
+      secret:
+        create: false
+        name: ""
+    messaging:
+      provider: in-memory
+      rabbitmq:
+        secret:
+          create: false
+  postgresql:
+    create: false
+  rabbitmq:
+    create: false
+
+ui:
+  image:
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-ui
+  service:
+    type: ClusterIP
+  ingress:
+    # Enable only after choosing and checking the GKE ingress/controller setup.
+    enabled: false
+    className: ""
+    annotations:
+      alb.ingress.kubernetes.io/load-balancer-name: null
+      alb.ingress.kubernetes.io/scheme: null
+      alb.ingress.kubernetes.io/target-type: null
+      alb.ingress.kubernetes.io/healthcheck-path: null
+  app:
+    session:
+      redis:
+        endpoint: ""
+        tls: false # Current UI template only emits redis://.

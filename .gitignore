@@ -22,3 +22,8 @@
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local validation runtime and output
+.venv/
+__pycache__/
+.validation-output/
