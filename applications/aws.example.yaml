@@ -1,6 +1,7 @@
 # INPUT TEMPLATE ONLY; cannot be applied while identity fields are empty.
 # First inspect existing Applications, Helm releases and resource ownership.
 # Manual-sync proposal: no automated policy, prune or cascading-delete finalizer.
+# Omission does not disable an existing live policy; follow the adoption runbook.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

@@ -286,6 +286,21 @@ def validate_structure(values, environment, supplied_documents, errors):
 
 
 def validate_no_aws_settings(values: dict[str, Any], errors: ValidationErrors):
+    for service in SERVICES:
+        create_path = (service, "securityGroups", "create")
+        if get_path(values, create_path) is True:
+            errors.add(
+                ".".join(create_path),
+                "AWS SecurityGroupPolicy settings are not allowed in GCP values",
+            )
+        ids_path = (service, "securityGroups", "securityGroupIds")
+        group_ids = get_path(values, ids_path)
+        if group_ids is not MISSING and bool(group_ids):
+            errors.add(
+                ".".join(ids_path),
+                "AWS security group IDs are not allowed in GCP values",
+            )
+
     for path, value in _walk(values):
         dotted = ".".join(path)
         key = path[-1].lower()

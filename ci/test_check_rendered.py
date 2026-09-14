@@ -33,6 +33,32 @@ class RenderedTypesTest(unittest.TestCase):
     def test_rejects_empty_output(self):
         self.assertTrue(check_documents([None]))
 
+    def test_rejects_aws_security_group_policy_for_gcp(self):
+        document = {'apiVersion': 'vpcresources.k8s.aws/v1beta1', 'kind': 'SecurityGroupPolicy'}
+        self.assertTrue(check_documents([document], environment='gcp'))
+        self.assertEqual([], check_documents([document], environment='aws'))
+
+    def test_rejects_rendered_aws_annotation_and_private_ecr_for_gcp(self):
+        document = {
+            'kind': 'Deployment',
+            'spec': {'template': {
+                'metadata': {'annotations': {'eks.amazonaws.com/role-arn': 'synthetic-role'}},
+                'spec': {'containers': [{'image': '000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/retail-orders:v1.0.0'}]},
+            }},
+        }
+        errors = check_documents([document], environment='gcp')
+        self.assertTrue(any('annotations' in error for error in errors))
+        self.assertTrue(any('image' in error for error in errors))
+
+    def test_accepts_native_gcp_workload(self):
+        document = {
+            'apiVersion': 'apps/v1', 'kind': 'Deployment',
+            'spec': {'template': {'spec': {'containers': [
+                {'image': 'asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-orders:v0.1.1'}
+            ]}}},
+        }
+        self.assertEqual([], check_documents([document], environment='gcp'))
+
 
 if __name__ == '__main__':
     unittest.main()

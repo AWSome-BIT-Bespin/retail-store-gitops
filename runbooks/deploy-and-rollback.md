@@ -38,7 +38,7 @@ helm template $application.spec.source.helm.releaseName ./src/app/chart `
     --namespace $application.spec.destination.namespace `
     -f "environments/$cloud/values.yaml" -f src/app/chart/versions.yaml > ".validation-output/$cloud.yaml"
 if ($LASTEXITCODE -ne 0) { throw 'Helm render failed' }
-.venv/Scripts/python.exe ci/check_rendered.py ".validation-output/$cloud.yaml"
+.venv/Scripts/python.exe ci/check_rendered.py ".validation-output/$cloud.yaml" --environment $cloud
 if ($LASTEXITCODE -ne 0) { throw 'Rendered Kubernetes type validation failed' }
 ```
 
@@ -84,7 +84,41 @@ WhaTap을 사용하는 경우 동일한 방식으로 실제 `secretName`의 `lic
 
 ## 4. Application 등록과 수동 동기화
 
-이 단계는 클러스터를 변경한다. 앞 단계가 완료되고 검토한 실제 파일이 targetRevision에 포함된 경우 실행한다. 예제의 빈칸을 채운 후에도 최초 적용 전 server dry-run과 기존 객체 diff를 확인한다.
+이 단계는 클러스터를 변경한다. 앞 단계가 완료되고 검토한 실제 파일이 targetRevision에 포함된 경우 실행한다.
+
+기존 Application은 **소스·values 경로를 바꾸기 전에** 자동 동기화와 실행 중인 작업을 확인한다. 예제에서 `syncPolicy`를 생략하는 것만으로 live 정책이 꺼지지는 않는다. 다른 도구가 설정한 필드는 apply 후에도 남을 수 있다. [Kubernetes apply의 병합 동작](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/#merge-patch-calculation).
+
+ApplicationSet 소유 객체라면 아래 직접 적용 절차를 중단하고 상위 ApplicationSet 템플릿의 소스·동기화 정책을 검토하는 변경으로 진행한다. 다른 GitOps 정의나 컨트롤러가 관리한다면 그 원본도 함께 조정해야 한다. 자식 Application만 바꾸면 다시 덮어써질 수 있다. 진행 중인 operation이 있으면 완료 또는 담당자의 명시적인 종료 조치 후 상태를 재확인한다.
+
+단독 Application일 때는 다음처럼 수동 정책으로 바꾸고 **실제 live 상태가 수동·유휴인지** 확인한다. 이 확인이 끝나기 전에는 source 변경을 apply하지 않는다. `--sync-policy none`은 수동 정책의 공식 별칭이다. [Argo CD app set](https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_set/).
+
+```powershell
+$existingJson = kubectl --context $argoContext -n $argoNamespace get applications.argoproj.io $appName --ignore-not-found -o json
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the existing Application' }
+if ($existingJson) {
+    $existingApp = $existingJson | ConvertFrom-Json
+    if (@($existingApp.metadata.ownerReferences | Where-Object { $_.kind -eq 'ApplicationSet' }).Count -gt 0) {
+        throw 'Update the owning ApplicationSet; do not apply a standalone child definition'
+    }
+    if ($null -ne $existingApp.operation -or $existingApp.status.operationState.phase -in @('Running', 'Terminating')) {
+        throw 'Resolve the active Application operation before changing the source'
+    }
+    argocd --server $argoServer app set $appName --app-namespace $argoNamespace --sync-policy none
+    if ($LASTEXITCODE -ne 0) { throw 'Could not disable existing automated sync' }
+    $pausedJson = kubectl --context $argoContext -n $argoNamespace get applications.argoproj.io $appName -o json
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot verify the paused Application' }
+    $pausedApp = $pausedJson | ConvertFrom-Json
+    $autoPolicy = $pausedApp.spec.syncPolicy.automated
+    if ($null -ne $autoPolicy -and $autoPolicy.enabled -ne $false) {
+        throw 'Live automated sync is still enabled; do not change the source'
+    }
+    if ($null -ne $pausedApp.operation -or $pausedApp.status.operationState.phase -in @('Running', 'Terminating')) {
+        throw 'An operation is active; do not change the source'
+    }
+}
+```
+
+신규 Application과 수동·유휴 상태를 확인한 단독 Application만 아래로 진행한다. 예제의 빈칸을 채운 후에도 최초 적용 전 server dry-run과 기존 객체 diff를 확인한다.
 
 ```powershell
 kubectl --context $argoContext apply --dry-run=server -f "applications/$cloud.yaml"
@@ -97,6 +131,12 @@ kubectl --context $argoContext diff -f "applications/$cloud.yaml"
 ```powershell
 kubectl --context $argoContext apply -f "applications/$cloud.yaml"
 if ($LASTEXITCODE -ne 0) { throw 'Application apply failed' }
+$appliedJson = kubectl --context $argoContext -n $argoNamespace get applications.argoproj.io $appName -o json
+if ($LASTEXITCODE -ne 0) { throw 'Cannot verify the applied Application' }
+$appliedApp = $appliedJson | ConvertFrom-Json
+$autoPolicy = $appliedApp.spec.syncPolicy.automated
+if ($null -ne $autoPolicy -and $autoPolicy.enabled -ne $false) { throw 'Automated sync was re-enabled; inspect its owner before continuing' }
+if ($null -ne $appliedApp.operation -or $appliedApp.status.operationState.phase -in @('Running', 'Terminating')) { throw 'Unexpected operation after apply; inspect before continuing' }
 argocd --server $argoServer app get $appName --refresh
 argocd --server $argoServer app diff $appName
 ```

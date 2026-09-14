@@ -180,6 +180,7 @@ class ValidatorTestCase(unittest.TestCase):
                     "messaging": {"provider": "in-memory"},
                 },
                 "postgresql": {"create": False},
+                "securityGroups": {"create": False, "securityGroupIds": []},
             },
             "ui": {
                 "image": {"repository": f"{registry}/retail-ui"},
@@ -289,6 +290,43 @@ class ActualStructureStackTests(unittest.TestCase):
                 with redirect_stdout(stdout), redirect_stderr(stderr):
                     code = main(args, repo_root=REPO_ROOT)
                 self.assertEqual(0, code, stderr.getvalue())
+
+    def test_actual_gcp_stack_rejects_aws_security_group_policy_settings(self):
+        cases = [
+            {"orders": {"securityGroups": {"create": True}}},
+            {
+                "orders": {
+                    "securityGroups": {
+                        "securityGroupIds": ["sg-0123456789abcdef0"]
+                    }
+                }
+            },
+        ]
+        for overlay in cases:
+            with self.subTest(overlay=overlay), tempfile.TemporaryDirectory() as directory:
+                overlay_path = Path(directory) / "gcp-security-groups.yaml"
+                ValidatorTestCase.write_yaml(overlay_path, overlay)
+                args = [
+                    "--environment",
+                    "gcp",
+                    "--mode",
+                    "structure",
+                    "-f",
+                    str(REPO_ROOT / "environments" / "gcp" / "values.example.yaml"),
+                    "-f",
+                    str(REPO_ROOT / "ci" / "fixtures" / "gcp.yaml"),
+                    "-f",
+                    str(overlay_path),
+                    "-f",
+                    str(REPO_ROOT / "src" / "app" / "chart" / "versions.yaml"),
+                ]
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = main(args, repo_root=REPO_ROOT)
+                self.assertEqual(1, code)
+                self.assertIn("orders.securityGroups", stderr.getvalue())
+                self.assertIn("GCP", stderr.getvalue())
 
 
 class YamlAndTypeValidationTests(ValidatorTestCase):
@@ -566,6 +604,8 @@ class DeploymentValueValidationTests(ValidatorTestCase):
             (("ui", "ingress", "annotations", "alb.ingress.kubernetes.io/scheme"), "internet-facing"),
             (("ui", "ingress", "className"), "alb"),
             (("ui", "app", "endpoints", "catalog"), "https://catalog.amazonaws.com"),
+            (("orders", "securityGroups", "create"), True),
+            (("orders", "securityGroups", "securityGroupIds"), ["sg-0123456789abcdef0"]),
         ]
         for path, value in cases:
             with self.subTest(path=path):

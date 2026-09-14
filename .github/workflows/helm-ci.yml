@@ -68,7 +68,7 @@ jobs:
             helm lint ./src/app/chart --with-subcharts "${values[@]}"
             helm template cd-structure ./src/app/chart --namespace cd-structure \
               "${values[@]}" > "$RUNNER_TEMP/retail-$cloud-structure.yaml"
-            python ci/check_rendered.py "$RUNNER_TEMP/retail-$cloud-structure.yaml"
+            python ci/check_rendered.py "$RUNNER_TEMP/retail-$cloud-structure.yaml" --environment "$cloud"
           done
           echo 'Structure checks passed using synthetic fixtures. This is not a deployment-readiness result.' >> "$GITHUB_STEP_SUMMARY"
 
@@ -100,7 +100,7 @@ jobs:
                   'helm', 'template', spec['source']['helm']['releaseName'], './src/app/chart',
                   '--namespace', spec['destination']['namespace'], *values,
               ], check=True, stdout=stream)
-          subprocess.run(['python', 'ci/check_rendered.py', str(output)], check=True)
+          subprocess.run(['python', 'ci/check_rendered.py', str(output), '--environment', cloud], check=True)
           PY
               echo "$cloud: offline deployment inputs and rendering passed. Image publication, target access and runtime behavior remain unverified." >> "$GITHUB_STEP_SUMMARY"
             else

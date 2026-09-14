@@ -38,7 +38,7 @@ foreach ($cloud in @('aws', 'gcp')) {
     if ($LASTEXITCODE -ne 0) { throw "$cloud Helm lint failed" }
     helm template cd-structure ./src/app/chart --namespace cd-structure @values > ".validation-output/$cloud-structure.yaml"
     if ($LASTEXITCODE -ne 0) { throw "$cloud Helm render failed" }
-    .venv/Scripts/python.exe ci/check_rendered.py ".validation-output/$cloud-structure.yaml"
+    .venv/Scripts/python.exe ci/check_rendered.py ".validation-output/$cloud-structure.yaml" --environment $cloud
     if ($LASTEXITCODE -ne 0) { throw "$cloud rendered Kubernetes type check failed" }
 }
 ```
@@ -47,7 +47,7 @@ foreach ($cloud in @('aws', 'gcp')) {
 
 ## CI 결과 읽기
 
-PR, main push, 수동 실행에서 타입 검사·회귀 테스트·AWS/GCP 구조 lint/render와 기존 Argo CD bootstrap 검사를 수행한다. 최종 렌더링에서는 annotation과 ConfigMap 데이터가 Kubernetes 문자열 타입에 맞는지도 확인한다. 실제 `environments/<cloud>/values.yaml` 또는 `applications/<cloud>.yaml` 중 하나라도 생기면 두 파일 모두를 요구하고 배포 입력 검사와 렌더링을 수행한다. 둘 다 없으면 실행 요약에 `NOT CONFIGURED`를 표시한다.
+PR, main push, 수동 실행에서 타입 검사·회귀 테스트·AWS/GCP 구조 lint/render와 기존 Argo CD bootstrap 검사를 수행한다. 최종 렌더링에서는 annotation과 ConfigMap 데이터가 Kubernetes 문자열 타입에 맞는지도 확인하고, GCP에 AWS 보안그룹 같은 전용 리소스·IRSA·ALB·private ECR 설정이 섞이면 거부한다. 실제 `environments/<cloud>/values.yaml` 또는 `applications/<cloud>.yaml` 중 하나라도 생기면 두 파일 모두를 요구하고 배포 입력 검사와 렌더링을 수행한다. 둘 다 없으면 실행 요약에 `NOT CONFIGURED`를 표시한다.
 
 수동 실행의 `deployment_environment`를 `aws` 또는 `gcp`로 지정하면 실제 파일이 없어도 해당 입력 검사를 요구하므로, 현재 미구성 상태에서는 실패하는 것이 맞다. `structure`는 시험값으로 검증하는 기본 선택이다. 어느 모드도 이미지 게시·Argo 등록·클러스터 적용을 실행하지 않는다.
 

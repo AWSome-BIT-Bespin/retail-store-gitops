@@ -1,5 +1,6 @@
 # INPUT TEMPLATE ONLY; GKE cluster registration and data dependencies unverified.
 # Manual-sync proposal; do not enable automatic DR activation through this file.
+# Disable and verify an existing live policy before changing its source (runbook).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
