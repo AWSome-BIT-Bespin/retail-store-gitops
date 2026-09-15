@@ -99,6 +99,7 @@ app:
   session:
     redis:
       endpoint: ""
+      secretName: ""
   search:
     enabled: false
   chat:

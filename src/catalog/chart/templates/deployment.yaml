@@ -62,7 +62,7 @@ spec:
                   name: {{ required "whatap.secretName is required when whatap.enabled=true" .Values.whatap.secretName | quote }}
                   key: license
             - name: WHATAP_SERVER_HOST
-              value: {{ required "whatap.serverHost is required when whatap.enabled=true" .Values.whatap.serverHost | quote }}
+              valueFrom: {{ required "whatap.serverHost is required when whatap.enabled=true" .Values.whatap.serverHost | quote }}
             - name: WHATAP_APP_NAME
               value: {{ .Values.whatap.appName | quote }}
             - name: WHATAP_OKIND

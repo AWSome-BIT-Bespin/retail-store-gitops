@@ -89,6 +89,7 @@ app:
     provider: "in-memory"
     redis:
       endpoint: ""
+      secretName: ""
       tls: false
 
   endpoints:

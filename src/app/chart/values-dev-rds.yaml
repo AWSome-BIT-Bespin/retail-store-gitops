@@ -9,20 +9,26 @@ cart:
     create: false
 
   serviceAccount:
-    annotations:
-      eks.amazonaws.com/role-arn: []
+    create: false
+    name: carts-dynamo
+    annotations: {}
 
 catalog:
   app:
     persistence:
       provider: in-memory
+  whatap:
+    enabled: false
+    secretName: catalog-whatap
+    secretHost: ""
 
 checkout:
   app:
     persistence:
       provider: redis
       redis:
-        endpoint: []
+        endpoint: ""
+        secretName: retail-redis
         tls: false
     endpoints:
       orders: http://orders:80
@@ -31,6 +37,9 @@ checkout:
 
   whatap:
     enabled: false
+    secretName: checkout-whatap
+    secretHost: ""
+
 
 orders:
   app:
@@ -63,5 +72,6 @@ ui:
   app:
     session:
       redis:
-        endpoint: retailstore-valkey-001.lk6esl.0001.apn2.cache.amazonaws.com:6379
+        endpoint: ""
+        secretName: retail-redis
         tls: false
