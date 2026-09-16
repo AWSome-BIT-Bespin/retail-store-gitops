@@ -180,7 +180,9 @@ argocd --server $argoServer app get $appName --refresh
 
 Application과 AWS values를 처음 추가한 커밋 전체를 revert하면 Argo가 읽는 파일까지 사라질 수 있다. 최초 인수 시에는 현재 배포와 같은 설정·이미지를 담은 기준 커밋을 먼저 만들고, 새 이미지 변경은 그 다음 커밋으로 분리한다. 문제가 생기면 Application과 환경 파일을 보존한 채 기준 커밋으로 수동 sync하거나 버전 변경만 되돌리는 복구 PR을 사용한다. 배포 기록에 두 SHA를 남긴다.
 
-2026-09-16 인수 전 버전은 Cart v0.0.1, Catalog v0.0.1, Checkout v0.0.1, Orders v0.1.0, UI v0.1.2이다. 저장소의 과거 `versions.yaml`은 실제 Pod보다 앞섰으므로 과거 main SHA만으로 복구 기준을 정하지 않는다. 인수 전 리소스 27개의 복구 사본도 기존 Bastion의 접근 제한 디렉터리에 저장했다. Git 경로 자체가 실패하면 실행 중인 sync를 종료한 후 자동 sync가 없는 상태에서 이 사본을 적용하고 health를 다시 확인한다. 사본은 Secret 비밀값이나 DB 데이터를 복구하는 수단이 아니다.
+2026-09-16 최초 조사 이후 다른 작업자가 Catalog v0.0.3과 Checkout v0.0.4를 반영한 사실을 확인했다. 이 변경을 보존한 **실제 인수 기준 커밋은 `fa895c3dc1c1651102de24a91e4785d1b84eebe2`**이며, Cart v0.0.1 / Catalog v0.0.3 / Checkout v0.0.4 / Orders v0.1.0 / UI v0.1.2 상태에서 Argo CD `Synced / Healthy`를 검증했다. 다음 릴리스 `4766e1a1dbef5dda55f662b55c8042ff42f242a3`은 Cart·Orders·UI 세 이미지만 변경한다. 최초 조사 시점의 두 v0.0.1 이미지나 과거 main SHA를 현재 복구 기준으로 사용하지 않는다. 자세한 증거는 [9월 16일 배포 기록](release-20260916.md)을 따른다.
+
+인수 직전 리소스 27개의 복구 사본은 기존 Bastion의 `/home/ec2-user/retail-cd-20260916-gsa7ufke/rollback-resources.json`에 접근을 제한해 저장했다. Git 경로 자체가 실패하면 실행 중인 sync를 종료한 후 자동 sync가 없는 상태에서 이 사본을 적용하고 health를 다시 확인한다. 사본은 Secret 비밀값이나 DB 데이터를 복구하는 수단이 아니다. 이번 작업에서는 기준 배포의 정상 상태와 복구 파일을 검증했으며, 새 버전 배포 후 실제 버전 하향 롤백 훈련은 실행하지 않았다.
 
 ### 이미 GitOps로 관리되는 릴리스
 
