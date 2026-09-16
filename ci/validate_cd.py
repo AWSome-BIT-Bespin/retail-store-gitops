@@ -425,7 +425,9 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
     for service in ("catalog", "checkout"):
         if get_path(values, (service, "whatap", "enabled")) is True:
             errors.require_string(values, (service, "whatap", "secretName"), actual=True)
-            errors.require_string(values, (service, "whatap", "serverHost"), actual=True)
+            host = get_path(values, (service, "whatap", "serverHost"))
+            if service == "catalog" or host not in (MISSING, None, ""):
+                errors.require_string(values, (service, "whatap", "serverHost"), actual=True)
 
 
 def validate_application(application, environment, repo_root, supplied_paths, errors):

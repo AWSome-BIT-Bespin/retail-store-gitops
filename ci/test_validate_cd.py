@@ -568,7 +568,15 @@ class DeploymentValueValidationTests(ValidatorTestCase):
         self.assertEqual(1, code)
         self.assertIn("orders.app.persistence.secret.create", stderr)
 
-    def test_whatap_requires_secret_and_server_when_enabled(self):
+    def test_checkout_whatap_accepts_server_host_from_existing_secret(self):
+        self.values['checkout']['whatap'] = {
+            'enabled': True, 'secretName': 'whatap-with-host', 'serverHost': '',
+        }
+        self.persist()
+        code, _, stderr = self.invoke()
+        self.assertEqual(0, code, stderr)
+
+    def test_whatap_requires_secret_and_catalog_requires_explicit_server(self):
         for service in ("catalog", "checkout"):
             with self.subTest(service=service):
                 self.values[service]["whatap"] = {
@@ -580,7 +588,8 @@ class DeploymentValueValidationTests(ValidatorTestCase):
                 code, _, stderr = self.invoke()
                 self.assertEqual(1, code)
                 self.assertIn(f"{service}.whatap.secretName", stderr)
-                self.assertIn(f"{service}.whatap.serverHost", stderr)
+                if service == 'catalog':
+                    self.assertIn(f"{service}.whatap.serverHost", stderr)
                 self.values = self.valid_values("aws")
 
     def test_rejects_ui_redis_tls_until_chart_supports_it(self):

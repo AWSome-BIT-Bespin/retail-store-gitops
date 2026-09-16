@@ -1,0 +1,30 @@
+# Existing retail-dev release, manually synchronized after diff review.
+# No automated sync, pruning or cascading-delete finalizer.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: retail-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AWSome-BIT-Bespin/retail-store-gitops.git
+    targetRevision: main
+    path: src/app/chart
+    helm:
+      releaseName: retail-dev
+      skipTests: true
+      valueFiles:
+        - ../../../environments/aws/values.yaml
+        - versions.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: retail-dev
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true

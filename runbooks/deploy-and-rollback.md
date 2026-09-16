@@ -1,6 +1,6 @@
 # 배포·검증·롤백 절차
 
-이 절차는 준비된 파일을 실제 환경에 연결할 때 사용할 운영 문서다. 이번 CD 준비에서 아래 클러스터 명령을 실행한 것은 아니다. 실제값·접근 권한·이미지 게시·기동 조건을 먼저 확인한다. 저장소 구조 검사만 통과한 상태에서 Application을 적용하지 않는다.
+이 절차는 실제 환경에 연결할 때 사용할 운영 문서다. 2026-09-16 AWS 환경 입력과 기존 배포 상태를 직접 확인해 `environments/aws/values.yaml`과 `applications/aws.yaml`을 준비했다. 아래 명령 전체를 실행 완료했다는 의미는 아니며, 실제 실행 결과는 별도 배포 기록으로 남긴다. 저장소 구조 검사만 통과한 상태에서 Application을 적용하지 않는다.
 
 ## 1. 실제 입력 파일과 이미지 증거 준비
 
@@ -42,7 +42,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Helm render failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Rendered Kubernetes type validation failed' }
 ```
 
-빈칸, 시험 파일·주소, 잘못된 타입, 환경에 맞지 않는 이미지 경로, 다른 values를 읽는 Application은 실패해야 한다. actual 파일이 아직 없는 현재 준비 상태에서도 실패가 정상이다. 통과는 로컬 입력 계약과 템플릿의 확인이며 Secret 존재, registry pull, 실제 연결·기동·구매 성공의 증거는 아니다.
+빈칸, 시험 파일·주소, 잘못된 타입, 환경에 맞지 않는 이미지 경로, 다른 values를 읽는 Application은 실패해야 한다. 아직 actual 파일이 없는 환경은 배포 입력 검사가 실패하는 것이 정상이다. 통과는 로컬 입력 계약과 템플릿의 확인이며 Secret 존재, registry pull, 실제 연결·기동·구매 성공의 증거는 아니다.
 
 ## 3. 기존 배포와 대상 확인
 
@@ -175,6 +175,14 @@ argocd --server $argoServer app get $appName --refresh
 ## 6. Git을 통한 롤백
 
 목표는 이전에 검증한 앱과 설정으로 돌아가는 것이다. 실패한 배포의 GitOps commit, 직전 정상 commit과 이미지, DB/데이터 호환성을 먼저 확인한다. 이미지·차트 되돌리기는 DB 스키마나 데이터 복구를 수행하지 않는다.
+
+### 최초 Argo 인수 배포
+
+Application과 AWS values를 처음 추가한 커밋 전체를 revert하면 Argo가 읽는 파일까지 사라질 수 있다. 최초 인수 시에는 현재 배포와 같은 설정·이미지를 담은 기준 커밋을 먼저 만들고, 새 이미지 변경은 그 다음 커밋으로 분리한다. 문제가 생기면 Application과 환경 파일을 보존한 채 기준 커밋으로 수동 sync하거나 버전 변경만 되돌리는 복구 PR을 사용한다. 배포 기록에 두 SHA를 남긴다.
+
+2026-09-16 인수 전 버전은 Cart v0.0.1, Catalog v0.0.1, Checkout v0.0.1, Orders v0.1.0, UI v0.1.2이다. 저장소의 과거 `versions.yaml`은 실제 Pod보다 앞섰으므로 과거 main SHA만으로 복구 기준을 정하지 않는다. 인수 전 리소스 27개의 복구 사본도 기존 Bastion의 접근 제한 디렉터리에 저장했다. Git 경로 자체가 실패하면 실행 중인 sync를 종료한 후 자동 sync가 없는 상태에서 이 사본을 적용하고 health를 다시 확인한다. 사본은 Secret 비밀값이나 DB 데이터를 복구하는 수단이 아니다.
+
+### 이미 GitOps로 관리되는 릴리스
 
 클린한 GitOps checkout에서 실패한 **단일 일반 commit**을 되돌릴 경우 다음처럼 복구 PR을 준비한다. `RETAIL_BAD_CD_COMMIT`에는 확인한 전체 commit SHA를 지정한다. merge commit은 mainline 선택이 필요하므로 이 명령을 그대로 사용하지 않는다.
 

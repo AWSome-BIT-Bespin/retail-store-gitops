@@ -2,13 +2,15 @@
 
 Retail Store의 공통 Helm 차트와 AWS/GCP 배포 설정을 관리한다. 이미지 빌드·ECR/GAR 게시는 `retail-store-app`의 GitHub Actions가 담당한다.
 
-현재 추가된 환경 파일과 Application은 **입력 예제**다. 실제 클러스터에 등록하거나 배포한 결과가 아니다. 구조 CI가 통과해도 배포 준비가 끝났다는 뜻은 아니다.
+AWS의 `environments/aws/values.yaml`과 `applications/aws.yaml`은 2026-09-16 실환경 조회를 바탕으로 작성했다. `*.example.yaml`과 GCP fixture는 입력·검사용 예제다. 파일 존재와 구조 CI 통과는 실제 배포 성공을 뜻하지 않으며, 실행 결과는 배포 기록에서 확인한다.
 
 | 경로 | 역할 |
 |---|---|
 | `src/app/chart/values.yaml` | 공통 서비스 이름과 내부 연결 |
 | `src/app/chart/versions.yaml` | 검증한 이미지 버전 기록. 환경 values 뒤에 적용 |
 | `environments/aws/values.example.yaml` | AWS 실제값을 채울 입력 양식 |
+| `environments/aws/values.yaml` | retail-dev-eks의 확인된 데이터·관측·Ingress·HPA 설정 |
+| `applications/aws.yaml` | retail-dev 릴리스를 연결하는 수동 동기화 Application |
 | `environments/gcp/values.example.yaml` | GCP 실제값과 미결정 데이터 구성을 채울 입력 양식 |
 | `applications/*.example.yaml` | Argo CD Application 초안. 대상 정보는 미입력 |
 | `ci/fixtures/` | 렌더링 전용 가상값. 배포에 사용 금지 |
@@ -49,6 +51,6 @@ foreach ($cloud in @('aws', 'gcp')) {
 
 PR, main push, 수동 실행에서 타입 검사·회귀 테스트·AWS/GCP 구조 lint/render와 기존 Argo CD bootstrap 검사를 수행한다. 최종 렌더링에서는 annotation과 ConfigMap 데이터가 Kubernetes 문자열 타입에 맞는지도 확인하고, GCP에 AWS 보안그룹 같은 전용 리소스·IRSA·ALB·private ECR 설정이 섞이면 거부한다. 실제 `environments/<cloud>/values.yaml` 또는 `applications/<cloud>.yaml` 중 하나라도 생기면 두 파일 모두를 요구하고 배포 입력 검사와 렌더링을 수행한다. 둘 다 없으면 실행 요약에 `NOT CONFIGURED`를 표시한다.
 
-수동 실행의 `deployment_environment`를 `aws` 또는 `gcp`로 지정하면 실제 파일이 없어도 해당 입력 검사를 요구하므로, 현재 미구성 상태에서는 실패하는 것이 맞다. `structure`는 시험값으로 검증하는 기본 선택이다. 어느 모드도 이미지 게시·Argo 등록·클러스터 적용을 실행하지 않는다.
+수동 실행의 `deployment_environment`를 `aws` 또는 `gcp`로 지정하면 실제 파일이 없어도 해당 입력 검사를 요구한다. AWS 파일은 현재 구성되어 있고 GCP 파일은 미구성이므로 GCP 배포 입력 검사는 실패하는 것이 맞다. `structure`는 시험값 검증을 기본으로 하되 구성된 AWS 파일도 검사한다. 어느 모드도 이미지 게시·Argo 등록·클러스터 적용을 실행하지 않는다.
 
-기존 `src/app/chart/values-dev-rds.yaml`은 미완성인 이전 환경 경로다. 배열 타입 오류 두 곳은 빈 문자열로 바꾸었지만 endpoint와 IAM 값은 채우지 않았다. 새 Application은 이 파일을 참조하지 않는다. 실제 배포가 기존 경로를 사용 중이라면 새 경로로 바꾸기 전에 담당자와 현재 값을 대조해야 한다.
+기존 `src/app/chart/values-dev-rds.yaml`은 이전 환경 경로다. 그 파일의 ServiceAccount·Secret 이름은 현재 retail-dev 실환경과 다르므로 새 AWS Application은 검증된 `environments/aws/values.yaml`을 사용한다. Bastion의 기존 수정 파일은 보존하고 실제 Helm 값과 Kubernetes 객체를 대조했다.
