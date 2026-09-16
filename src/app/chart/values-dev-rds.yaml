@@ -8,9 +8,11 @@ cart:
   dynamodb:
     create: false
 
+  # 기존: create=false, name=carts-dynamo
+  # 변경: Helm에서 carts-dynamo-sa 생성(Pod Identity용 annotation 없음)
   serviceAccount:
-    create: false
-    name: carts-dynamo
+    create: true
+    name: carts-dynamo-sa
     annotations: {}
 
 catalog:
@@ -21,6 +23,12 @@ catalog:
     enabled: false
     secretName: catalog-whatap
     secretHost: ""
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 catalog-sa 생성
+  serviceAccount:
+    create: true
+    name: catalog-sa
+    annotations: {}
 
 checkout:
   app:
@@ -40,6 +48,13 @@ checkout:
     secretName: checkout-whatap
     secretHost: ""
 
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 checkout-sa 생성
+  serviceAccount:
+    create: true
+    name: checkout-sa
+    annotations: {}
+
 
 orders:
   app:
@@ -56,6 +71,12 @@ orders:
       rabbitmq:
         secret:
           create: false
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 orders-sa 생성
+  serviceAccount:
+    create: true
+    name: orders-sa
+    annotations: {}
 
   postgresql:
     create: false
@@ -75,3 +96,10 @@ ui:
         endpoint: ""
         secretName: retail-redis
         tls: false
+
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 ui-sa 생성
+  serviceAccount:
+    create: true
+    name: ui-sa
+    annotations: {}
