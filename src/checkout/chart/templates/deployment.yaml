@@ -79,10 +79,14 @@ spec:
                   name: {{ required "whatap.secretName is required when whatap.enabled=true" .Values.whatap.secretName | quote }}
                   key: license
             - name: WHATAP_SERVER_HOST
+              {{- if .Values.whatap.serverHost }}
+              value: {{ .Values.whatap.serverHost | quote }}
+              {{- else }}
               valueFrom:
                 secretKeyRef:
                   name: {{ required "whatap.secretName is required when whatap.enabled=true" .Values.whatap.secretName | quote }}
                   key: serverHost
+              {{- end }}
             - name: WHATAP_MICRO_ENABLED
               value: "true"
             {{- end }}

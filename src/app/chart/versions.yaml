@@ -4,11 +4,11 @@ cart:
 
 catalog:
   image:
-    tag: "v0.0.2"
+    tag: "v0.0.3"
 
 checkout:
   image:
-    tag: "v0.0.3"
+    tag: "v0.0.4"
 
 orders:
   image:

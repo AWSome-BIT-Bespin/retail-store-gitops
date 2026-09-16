@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "cart": { "$ref": "#/$defs/cart" },
+    "catalog": { "$ref": "#/$defs/catalog" },
+    "checkout": { "$ref": "#/$defs/checkout" },
+    "orders": { "$ref": "#/$defs/orders" },
+    "ui": { "$ref": "#/$defs/ui" }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "null"] }
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string" },
+        "tag": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": true
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "annotations": { "$ref": "#/$defs/stringMap" },
+        "name": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": true
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "annotations": { "$ref": "#/$defs/stringMap" }
+      },
+      "additionalProperties": true
+    },
+    "common": {
+      "type": "object",
+      "properties": {
+        "image": { "$ref": "#/$defs/image" },
+        "serviceAccount": { "$ref": "#/$defs/serviceAccount" },
+        "service": { "$ref": "#/$defs/service" },
+        "podAnnotations": { "$ref": "#/$defs/stringMap" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "podAnnotations": { "$ref": "#/$defs/stringMap" }
+          },
+          "additionalProperties": true
+        },
+        "configMap": {
+          "type": "object",
+          "properties": { "create": { "type": "boolean" } },
+          "additionalProperties": true
+        },
+        "autoscaling": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } },
+          "additionalProperties": true
+        },
+        "opentelemetry": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } },
+          "additionalProperties": true
+        },
+        "podDisruptionBudget": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "secretReference": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "whatap": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "secretName": { "type": "string" },
+        "serverHost": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "annotations": { "$ref": "#/$defs/stringMap" }
+      },
+      "additionalProperties": true
+    },
+    "cart": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "properties": {
+            "app": {
+              "type": "object",
+              "properties": {
+                "persistence": {
+                  "type": "object",
+                  "properties": {
+                    "provider": { "type": "string" },
+                    "dynamodb": {
+                      "type": "object",
+                      "properties": {
+                        "tableName": { "type": "string" },
+                        "createTable": { "type": "boolean" }
+                      },
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            },
+            "dynamodb": {
+              "type": "object",
+              "properties": {
+                "create": { "type": "boolean" },
+                "image": { "$ref": "#/$defs/image" },
+                "podAnnotations": { "$ref": "#/$defs/stringMap" },
+                "service": { "$ref": "#/$defs/service" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "catalog": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "properties": {
+            "app": {
+              "type": "object",
+              "properties": {
+                "persistence": {
+                  "type": "object",
+                  "properties": {
+                    "provider": { "type": "string" },
+                    "endpoint": { "type": "string" },
+                    "database": { "type": "string" },
+                    "secret": { "$ref": "#/$defs/secretReference" }
+                  },
+                  "additionalProperties": true
+                },
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "provider": { "type": "string" },
+                    "endpoint": { "type": "string" }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            },
+            "mysql": { "$ref": "#/$defs/component" },
+            "opensearch": { "$ref": "#/$defs/component" },
+            "whatap": { "$ref": "#/$defs/whatap" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "component": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "image": { "$ref": "#/$defs/image" },
+        "podAnnotations": { "$ref": "#/$defs/stringMap" },
+        "service": { "$ref": "#/$defs/service" },
+        "persistentVolume": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "annotations": { "$ref": "#/$defs/stringMap" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "checkout": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "properties": {
+            "app": {
+              "type": "object",
+              "properties": {
+                "persistence": {
+                  "type": "object",
+                  "properties": {
+                    "provider": { "type": "string" },
+                    "redis": {
+                      "type": "object",
+                      "properties": {
+                        "endpoint": { "type": "string" },
+                        "tls": { "type": "boolean" }
+                      },
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "endpoints": { "$ref": "#/$defs/stringMap" }
+              },
+              "additionalProperties": true
+            },
+            "redis": { "$ref": "#/$defs/component" },
+            "whatap": { "$ref": "#/$defs/whatap" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "orders": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "properties": {
+            "app": {
+              "type": "object",
+              "properties": {
+                "persistence": {
+                  "type": "object",
+                  "properties": {
+                    "provider": { "type": "string" },
+                    "endpoint": { "type": "string" },
+                    "database": { "type": "string" },
+                    "secret": { "$ref": "#/$defs/secretReference" }
+                  },
+                  "additionalProperties": true
+                },
+                "messaging": {
+                  "type": "object",
+                  "properties": {
+                    "provider": { "type": "string" },
+                    "rabbitmq": {
+                      "type": "object",
+                      "properties": { "secret": { "$ref": "#/$defs/secretReference" } },
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            },
+            "postgresql": { "$ref": "#/$defs/component" },
+            "rabbitmq": { "$ref": "#/$defs/component" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "ui": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "properties": {
+            "app": {
+              "type": "object",
+              "properties": {
+                "endpoints": { "$ref": "#/$defs/stringMap" },
+                "session": {
+                  "type": "object",
+                  "properties": {
+                    "redis": {
+                      "type": "object",
+                      "properties": {
+                        "endpoint": { "type": "string" },
+                        "tls": { "type": "boolean" }
+                      },
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "search": {
+                  "type": "object",
+                  "properties": { "enabled": { "type": "boolean" } },
+                  "additionalProperties": true
+                },
+                "chat": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "provider": { "type": "string" }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            },
+            "ingress": { "$ref": "#/$defs/ingress" },
+            "ingresses": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/ingress" }
+            },
+            "istio": {
+              "type": "object",
+              "properties": { "enabled": { "type": "boolean" } },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

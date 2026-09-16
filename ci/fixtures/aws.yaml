@@ -1,0 +1,26 @@
+# SYNTHETIC STRUCTURE TEST ONLY. No resource below exists or is contacted.
+# This file must never be an Argo CD value file or deployment-preflight input.
+cart:
+  app:
+    persistence:
+      dynamodb:
+        tableName: cd-structure-only
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/cd-structure-only
+checkout:
+  app:
+    persistence:
+      redis:
+        endpoint: redis.aws.example.invalid:6379
+orders:
+  app:
+    persistence:
+      endpoint: postgres.aws.example.invalid:5432
+      secret:
+        name: cd-structure-orders-db
+ui:
+  app:
+    session:
+      redis:
+        endpoint: redis.aws.example.invalid:6379

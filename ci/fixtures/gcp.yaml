@@ -1,0 +1,22 @@
+# SYNTHETIC STRUCTURE TEST ONLY. No resource below exists or is contacted.
+# In-memory Cart exercises chart rendering; it is NOT the selected DR design.
+cart:
+  app:
+    persistence:
+      provider: in-memory
+checkout:
+  app:
+    persistence:
+      redis:
+        endpoint: redis.gcp.example.invalid:6379
+orders:
+  app:
+    persistence:
+      endpoint: postgres.gcp.example.invalid:5432
+      secret:
+        name: cd-structure-orders-db
+ui:
+  app:
+    session:
+      redis:
+        endpoint: redis.gcp.example.invalid:6379

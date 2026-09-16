@@ -90,6 +90,9 @@ app:
     dynamodb:
       tableName: Items
       createTable: false
+      tableNameSecret:
+        name: ""
+        key: RETAIL_CART_PERSISTENCE_DYNAMODB_TABLE_NAME
 
 dynamodb:
   create: false

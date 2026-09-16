@@ -1,0 +1,23 @@
+# INPUT TEMPLATE ONLY; cannot be applied while identity fields are empty.
+# First inspect existing Applications, Helm releases and resource ownership.
+# Manual-sync proposal: no automated policy, prune or cascading-delete finalizer.
+# Omission does not disable an existing live policy; follow the adoption runbook.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ""
+  namespace: "" # Namespace of the existing Argo CD installation.
+spec:
+  project: "" # Existing AppProject with this source and destination allowed.
+  source:
+    repoURL: https://github.com/AWSome-BIT-Bespin/retail-store-gitops.git
+    targetRevision: main
+    path: src/app/chart
+    helm:
+      releaseName: "" # Preserve the established release identity when adopting.
+      valueFiles:
+        - ../../../environments/aws/values.yaml
+        - versions.yaml
+  destination:
+    name: "" # Argo-registered cluster name, not assumed to be in-cluster.
+    namespace: "" # Existing/explicitly prepared application namespace.

@@ -43,6 +43,13 @@ spec:
           env:
             - name: JAVA_OPTS
               value: -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/urandom
+            {{- if and (eq .Values.app.persistence.provider "dynamodb") .Values.app.persistence.dynamodb.tableNameSecret.name }}
+            - name: RETAIL_CART_PERSISTENCE_DYNAMODB_TABLE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.persistence.dynamodb.tableNameSecret.name | quote }}
+                  key: {{ required "app.persistence.dynamodb.tableNameSecret.key is required" .Values.app.persistence.dynamodb.tableNameSecret.key | quote }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "carts.configMapName" . }}

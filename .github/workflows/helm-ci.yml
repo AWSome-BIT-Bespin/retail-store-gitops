@@ -2,7 +2,19 @@ name: GitOps Helm CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      deployment_environment:
+        description: Validate structure, or require completed deployment inputs for one cloud
+        type: choice
+        required: true
+        default: structure
+        options:
+          - structure
+          - aws
+          - gcp
 
 permissions:
   contents: read
@@ -10,7 +22,7 @@ permissions:
 jobs:
   helm-validate:
     name: Validate Helm chart
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -25,26 +37,81 @@ jobs:
       - name: Show Helm version
         run: helm version --short
 
+      - name: Set up isolated Python validation runtime
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cd-venv"
+          "$RUNNER_TEMP/cd-venv/bin/python" -m pip install -r ci/requirements.txt
+          echo "$RUNNER_TEMP/cd-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Test CD input validation
+        run: python -m unittest discover -s ci -p 'test_*.py' -v
+
+      - name: Check legacy values types
+        run: >
+          python ci/validate_cd.py --environment aws --mode structure
+          -f src/app/chart/values-dev-rds.yaml
+          -f src/app/chart/versions.yaml
+
       - name: Build Helm dependencies
         run: helm dependency build ./src/app/chart
 
-      - name: Lint Helm chart
-        run: >
-          helm lint ./src/app/chart
-          --with-subcharts
-          -f ./src/app/chart/values-dev-rds.yaml
-          -f ./src/app/chart/versions.yaml
+      - name: Validate, lint and render AWS and GCP structure fixtures
+        shell: bash
+        run: |
+          for cloud in aws gcp; do
+            values=(
+              -f "environments/$cloud/values.example.yaml"
+              -f "ci/fixtures/$cloud.yaml"
+              -f src/app/chart/versions.yaml
+            )
+            python ci/validate_cd.py --environment "$cloud" --mode structure "${values[@]}"
+            helm lint ./src/app/chart --with-subcharts "${values[@]}"
+            helm template cd-structure ./src/app/chart --namespace cd-structure \
+              "${values[@]}" > "$RUNNER_TEMP/retail-$cloud-structure.yaml"
+            python ci/check_rendered.py "$RUNNER_TEMP/retail-$cloud-structure.yaml" --environment "$cloud"
+          done
+          echo 'Structure checks passed using synthetic fixtures. This is not a deployment-readiness result.' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Render Helm chart
-        run: >
-          helm template retail-store ./src/app/chart
-          -f ./src/app/chart/values-dev-rds.yaml
-          -f ./src/app/chart/versions.yaml
-          --output-dir "$RUNNER_TEMP/retail-store-gitops-ci-rendered"
+      - name: Validate configured or explicitly requested deployment inputs
+        shell: bash
+        env:
+          REQUESTED_ENVIRONMENT: ${{ inputs.deployment_environment || 'structure' }}
+        run: |
+          for cloud in aws gcp; do
+            if [[ "$REQUESTED_ENVIRONMENT" == "$cloud" || -e "environments/$cloud/values.yaml" || -e "applications/$cloud.yaml" ]]; then
+              python ci/validate_cd.py --environment "$cloud" --mode deployment \
+                -f "environments/$cloud/values.yaml" \
+                -f src/app/chart/versions.yaml \
+                --application "applications/$cloud.yaml"
+              CLOUD="$cloud" python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          import yaml
+
+          cloud = os.environ['CLOUD']
+          app = yaml.safe_load(Path(f'applications/{cloud}.yaml').read_text())
+          spec = app['spec']
+          values = ['-f', f'environments/{cloud}/values.yaml', '-f', 'src/app/chart/versions.yaml']
+          subprocess.run(['helm', 'lint', './src/app/chart', '--with-subcharts', *values], check=True)
+          output = Path(os.environ['RUNNER_TEMP']) / f'retail-{cloud}-deployment-inputs.yaml'
+          with output.open('w') as stream:
+              subprocess.run([
+                  'helm', 'template', spec['source']['helm']['releaseName'], './src/app/chart',
+                  '--namespace', spec['destination']['namespace'], *values,
+              ], check=True, stdout=stream)
+          subprocess.run(['python', 'ci/check_rendered.py', str(output), '--environment', cloud], check=True)
+          PY
+              echo "$cloud: offline deployment inputs and rendering passed. Image publication, target access and runtime behavior remain unverified." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::notice::$cloud deployment inputs are not configured; only structure was checked."
+              echo "$cloud: NOT CONFIGURED (environments/$cloud/values.yaml and applications/$cloud.yaml are absent)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
   argocd-bootstrap-validate:
     name: Validate Argo CD bootstrap
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:

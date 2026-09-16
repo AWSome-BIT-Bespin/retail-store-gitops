@@ -1,0 +1,85 @@
+# INPUT TEMPLATE ONLY. Copy to values.yaml after confirming the inputs.
+# Empty strings are intentional. Never add passwords or license values here.
+# Shared names/endpoints: src/app/chart/values.yaml. Tags: versions.yaml, last.
+cart:
+  image:
+    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-cart
+  app:
+    persistence:
+      provider: dynamodb
+      dynamodb:
+        tableName: ""
+        createTable: false
+  dynamodb:
+    create: false
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: ""
+
+catalog:
+  image:
+    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-catalog
+  app:
+    persistence:
+      provider: in-memory
+  whatap:
+    # Recheck compatibility before changing the published Catalog image.
+    enabled: false
+    secretName: ""
+    serverHost: ""
+
+checkout:
+  image:
+    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-checkout
+  app:
+    persistence:
+      provider: redis
+      redis:
+        endpoint: "" # host:port, no redis:// prefix
+        tls: false # Confirm with the Redis owner.
+    endpoints:
+      orders: http://orders:80
+  redis:
+    create: false
+  whatap:
+    enabled: false
+    secretName: ""
+    serverHost: ""
+
+orders:
+  image:
+    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-orders
+  app:
+    persistence:
+      provider: postgres
+      endpoint: "" # host:port
+      database: orders
+      secret:
+        create: false
+        name: "" # Existing Secret in the application namespace.
+    messaging:
+      provider: in-memory
+      rabbitmq:
+        secret:
+          create: false
+  postgresql:
+    create: false
+  rabbitmq:
+    create: false
+
+ui:
+  image:
+    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-ui
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    className: alb
+    annotations:
+      # Do not inherit an unconfirmed ALB name from the subchart.
+      alb.ingress.kubernetes.io/load-balancer-name: null
+  app:
+    session:
+      redis:
+        endpoint: "" # Confirm the intended shared Redis with Checkout.
+        tls: false # The current UI template does not support TLS; see runbook.
