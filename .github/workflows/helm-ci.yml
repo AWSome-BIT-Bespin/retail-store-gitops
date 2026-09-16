@@ -28,19 +28,36 @@ jobs:
       - name: Build Helm dependencies
         run: helm dependency build ./src/app/chart
 
+      # AWS 환경 values 경로를 environments/aws로 분리했습니다.
       - name: Lint Helm chart
         run: >
           helm lint ./src/app/chart
           --with-subcharts
-          -f ./src/app/chart/values-dev-rds.yaml
+          -f ./environments/aws/values-dev-rds.yaml
           -f ./src/app/chart/versions.yaml
 
+      # AWS 분리 values를 사용해 동일한 Chart를 렌더링합니다.
       - name: Render Helm chart
         run: >
           helm template retail-store ./src/app/chart
-          -f ./src/app/chart/values-dev-rds.yaml
+          -f ./environments/aws/values-dev-rds.yaml
           -f ./src/app/chart/versions.yaml
           --output-dir "$RUNNER_TEMP/retail-store-gitops-ci-rendered"
+
+      # GKE DR values도 공통 Umbrella Chart로 정적 검증합니다.
+      - name: Lint GKE DR Helm values
+        run: >
+          helm lint ./src/app/chart
+          --with-subcharts
+          -f ./environments/gke/values-dr.yaml
+          -f ./src/app/chart/versions.yaml
+
+      - name: Render GKE DR Helm chart
+        run: >
+          helm template retail-store-dr ./src/app/chart
+          -f ./environments/gke/values-dr.yaml
+          -f ./src/app/chart/versions.yaml
+          --output-dir "$RUNNER_TEMP/retail-store-gke-dr-rendered"
 
   argocd-bootstrap-validate:
     name: Validate Argo CD bootstrap
