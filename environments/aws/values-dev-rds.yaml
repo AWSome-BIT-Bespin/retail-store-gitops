@@ -92,6 +92,8 @@ ui:
     className: alb
   app:
     session:
+      # AWS는 기존 ElastiCache Redis Session을 명시적으로 사용합니다.
+      type: redis
       redis:
         endpoint: ""
         secretName: retail-redis

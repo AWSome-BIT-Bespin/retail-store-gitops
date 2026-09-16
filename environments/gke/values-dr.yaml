@@ -131,6 +131,8 @@ ui:
       checkout: http://checkout:80
       orders: http://orders:80
     session:
+      # GKE DR은 Redis 없이 Local Session을 사용합니다.
+      type: local
       redis:
         # Redis session을 사용하지 않습니다.
         endpoint: ""

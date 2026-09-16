@@ -13,6 +13,6 @@ dependencies:
   version: v0.1.0
 - name: retail-store-ui-chart
   repository: file://../../ui/chart
-  version: v0.1.2
-digest: sha256:d4b0461667b88a9995641bc85eb632738a176da613bc174f094dae83a63c5ef4
-generated: "2026-09-10T23:59:03.164+09:00"
+  version: v0.1.3
+digest: sha256:ddc6532586d070d5197f52c5c8e578572f5311e6ef4c92b56a419f1ce7e4d4a1
+generated: "2026-09-16T13:50:34.111912+09:00"

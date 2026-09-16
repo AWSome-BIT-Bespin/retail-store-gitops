@@ -97,6 +97,8 @@ app:
     #checkout: http://checkout:80
     #recommendations: http://recommendations:80
   session:
+    # 기존 Redis endpoint/Secret 자동 판단을 유지하며 local/redis도 명시할 수 있습니다.
+    type: auto
     redis:
       endpoint: ""
       secretName: ""
