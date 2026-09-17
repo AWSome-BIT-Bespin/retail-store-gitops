@@ -1,0 +1,151 @@
+# GKE DR 전용 values입니다. 이미지 tag는 공통 src/app/chart/versions.yaml을 사용합니다.
+
+cart:
+  # 기존 기본값(autoscaling=true) 대신 DR에서는 단일 고정 Pod를 사용합니다.
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  image:
+    # AWS ECR 대신 GCP Artifact Registry 이미지를 사용합니다.
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-cart
+  app:
+    persistence:
+      # AWS 환경의 DynamoDB 설정과 분리하여 GKE DR은 메모리 저장소를 사용합니다.
+      provider: in-memory
+      dynamodb:
+        createTable: false
+  dynamodb:
+    # GKE DR에서는 DynamoDB Local을 생성하지 않습니다.
+    create: false
+  # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
+  serviceAccount:
+    create: true
+    name: carts-dynamo-sa
+    annotations: {}
+
+catalog:
+  # 기존 기본값(autoscaling=true) 대신 DR에서는 단일 고정 Pod를 사용합니다.
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  image:
+    # AWS ECR 대신 GCP Artifact Registry 이미지를 사용합니다.
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-catalog
+  app:
+    persistence:
+      # AWS 환경의 DB 설정과 분리하여 GKE DR은 메모리 저장소를 사용합니다.
+      provider: in-memory
+      secret:
+        # 인메모리 DR에서는 사용하지 않는 DB Secret을 생성하지 않습니다.
+        create: false
+  mysql:
+    # GKE DR에서는 MySQL을 생성하지 않습니다.
+    create: false
+  # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
+  serviceAccount:
+    create: true
+    name: catalog-sa
+    annotations: {}
+
+checkout:
+  # 기존 기본값(autoscaling=true) 대신 DR에서는 단일 고정 Pod를 사용합니다.
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  image:
+    # AWS ECR 대신 GCP Artifact Registry 이미지를 사용합니다.
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-checkout
+  app:
+    persistence:
+      # 공통 기본값(redis)과 분리하여 GKE DR은 메모리 저장소를 사용합니다.
+      provider: in-memory
+      redis:
+        endpoint: ""
+        secretName: ""
+        tls: false
+    endpoints:
+      # GKE 내부 Orders Service를 사용합니다.
+      orders: http://orders:80
+  redis:
+    # GKE DR에서는 Redis를 생성하지 않습니다.
+    create: false
+  whatap:
+    # DR 클러스터에 Whatap Secret이 없으므로 비활성화합니다.
+    enabled: false
+  # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
+  serviceAccount:
+    create: true
+    name: checkout-sa
+    annotations: {}
+
+orders:
+  # DMS CDC 중에는 GKE Orders Pod를 실행하지 않습니다.
+  replicaCount: 0
+  autoscaling:
+    enabled: false
+  image:
+    # AWS ECR 대신 GCP Artifact Registry 이미지를 사용합니다.
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-orders
+  app:
+    persistence:
+      # 공통 기본값(in-memory)에서 외부 GCP PostgreSQL 사용으로 지정합니다.
+      provider: postgres
+      # GCP DR PostgreSQL endpoint는 아직 확인되지 않아 비워 둡니다.
+      endpoint: ""
+      database: orders
+      secret:
+        # 외부 PostgreSQL 연결 Secret orders-db를 사용합니다.
+        create: false
+        name: orders-db
+    messaging:
+      # RabbitMQ 대신 인메모리 메시징을 사용합니다.
+      provider: in-memory
+      rabbitmq:
+        secret:
+          create: false
+  postgresql:
+    # 외부 GCP PostgreSQL을 사용하므로 PostgreSQL Pod를 생성하지 않습니다.
+    create: false
+  rabbitmq:
+    # GKE DR에서는 RabbitMQ를 생성하지 않습니다.
+    create: false
+  # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
+  serviceAccount:
+    create: true
+    name: orders-sa
+    annotations: {}
+
+ui:
+  # 기존 기본값(autoscaling=true) 대신 DR에서는 단일 고정 Pod를 사용합니다.
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  image:
+    # AWS ECR 대신 GCP Artifact Registry 이미지를 사용합니다.
+    repository: asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-ui
+  app:
+    endpoints:
+      # GKE 내부 Service endpoint를 사용합니다.
+      carts: http://carts:80
+      catalog: http://catalog:80
+      checkout: http://checkout:80
+      orders: http://orders:80
+    session:
+      # GKE DR은 Redis 없이 Local Session을 사용합니다.
+      type: local
+      redis:
+        # Redis session을 사용하지 않습니다.
+        endpoint: ""
+        secretName: ""
+  ingress:
+    # AWS ALB Ingress 대신 GKE LoadBalancer Service를 사용합니다.
+    enabled: false
+  service:
+    # 공통 기본값(ClusterIP) 대신 GKE LoadBalancer Service를 사용합니다.
+    type: LoadBalancer
+    port: 80
+  # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
+  serviceAccount:
+    create: true
+    name: ui-sa
+    annotations: {}

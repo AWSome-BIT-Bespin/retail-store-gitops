@@ -48,7 +48,13 @@ data:
   {{- if .Values.app.endpoints.assets }}
   RETAIL_UI_ENDPOINTS_ASSETS: {{ .Values.app.endpoints.assets }}
   {{- end }}
-  {{- if or .Values.app.session.redis.endpoint .Values.app.session.redis.secretName }}
+  {{- $sessionType := default "auto" .Values.app.session.type }}
+  {{- $redisConfigured := or .Values.app.session.redis.endpoint .Values.app.session.redis.secretName }}
+  {{- if eq $sessionType "local" }}
+  SPRING_SESSION_STORE_TYPE: "none"
+  MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
+  SPRING_AUTOCONFIGURE_EXCLUDE: "org.springframework.boot.autoconfigure.session.SessionAutoConfiguration"
+  {{- else if or (eq $sessionType "redis") (and (eq $sessionType "auto") $redisConfigured) }}
   SPRING_SESSION_STORE_TYPE: redis
   {{- if not .Values.app.session.redis.secretName }}
   SPRING_DATA_REDIS_URL: redis://{{ .Values.app.session.redis.endpoint }}

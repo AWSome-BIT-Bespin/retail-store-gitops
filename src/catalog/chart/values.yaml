@@ -43,8 +43,8 @@ resources:
   limits:
     memory: 128Mi
   requests:
-    cpu: 25m
-    memory: 32Mi
+    cpu: 50m
+    memory: 64Mi
 
 autoscaling:
   enabled: true

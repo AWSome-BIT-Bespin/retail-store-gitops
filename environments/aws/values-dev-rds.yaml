@@ -1,0 +1,111 @@
+cart:
+  app:
+    persistence:
+      provider: dynamodb
+      dynamodb:
+        tableName: retail-store-cart
+        createTable: false
+  dynamodb:
+    create: false
+
+  # 기존: create=false, name=carts-dynamo
+  # 변경: Helm에서 carts-dynamo-sa 생성(Pod Identity용 annotation 없음)
+  serviceAccount:
+    create: true
+    name: carts-dynamo-sa
+    annotations: {}
+
+catalog:
+  app:
+    persistence:
+      provider: in-memory
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 catalog-sa 생성
+  serviceAccount:
+    create: true
+    name: catalog-sa
+    annotations: {}
+  whatap:
+    enabled: true
+    secretName: whatap-credentials
+    serverHost: 13.124.11.223/13.209.172.35
+    appName: catalog
+    okind: catalog
+
+
+checkout:
+  app:
+    persistence:
+      provider: redis
+      redis:
+        endpoint: ""
+        secretName: retail-redis
+        tls: false
+    endpoints:
+      orders: http://orders:80
+  redis:
+    create: false
+
+  whatap:
+    enabled: true
+    secretName: whatap-credentials
+    serverHost: 13.124.11.223/13.209.172.35
+    okind: checkout
+
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 checkout-sa 생성
+  serviceAccount:
+    create: true
+    name: checkout-sa
+    annotations: {}
+
+
+orders:
+  app:
+    persistence:
+      provider: postgres
+      endpoint: ""
+      database: orders
+      secret:
+        create: false
+        name: orders-db
+
+    messaging:
+      provider: in-memory
+      rabbitmq:
+        secret:
+          create: false
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 orders-sa 생성
+  serviceAccount:
+    create: true
+    name: orders-sa
+    annotations: {}
+
+  postgresql:
+    create: false
+
+  rabbitmq:
+    create: false
+
+ui:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    className: alb
+  app:
+    session:
+      # AWS는 기존 ElastiCache Redis Session을 명시적으로 사용합니다.
+      type: redis
+      redis:
+        endpoint: ""
+        secretName: retail-redis
+        tls: false
+
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 ui-sa 생성
+  serviceAccount:
+    create: true
+    name: ui-sa
+    annotations: {}
