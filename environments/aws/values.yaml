@@ -1,3 +1,25 @@
+whatapAgent:
+  enabled: true
+  name: whatap
+  apm:
+    targetName: retail-java
+    javaVersion: latest
+    namespace: retail-store
+    podNames:
+      - carts
+      - orders
+      - ui
+  k8sAgent:
+    customImageFullName: public.ecr.aws/whatap/kube_mon:1.8.7
+    masterAgent:
+      enabled: true
+    nodeAgent:
+      enabled: true
+      runtime: containerd
+      runtimeSocketPath: /var/run/containerd/containerd.sock
+    gpuMonitoring:
+      enabled: false
+
 cart:
   app:
     persistence:

@@ -120,11 +120,6 @@ class ValidatorTestCase(unittest.TestCase):
     def valid_values(self, environment):
         registry = AWS_REGISTRY if environment == "aws" else GCP_REGISTRY
         cart_provider = "dynamodb" if environment == "aws" else "in-memory"
-        cart_annotations = (
-            {"eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/retail-cart"}
-            if environment == "aws"
-            else {}
-        )
         ingress = (
             {
                 "enabled": True,
@@ -143,11 +138,17 @@ class ValidatorTestCase(unittest.TestCase):
         return {
             "cart": {
                 "image": {"repository": f"{registry}/retail-cart"},
-                "serviceAccount": {"annotations": cart_annotations},
+                "serviceAccount": {
+                    "annotations": {},
+                    **({"name": "carts-dynamo-sa"} if environment == "aws" else {}),
+                },
                 "app": {
                     "persistence": {
                         "provider": cart_provider,
-                        "dynamodb": {"tableName": "retail-cart", "createTable": False},
+                        "dynamodb": {
+                            "tableName": "retail-store-cart" if environment == "aws" else "retail-cart",
+                            "createTable": False,
+                        },
                     }
                 },
                 "dynamodb": {"create": False},
@@ -162,7 +163,11 @@ class ValidatorTestCase(unittest.TestCase):
                 "app": {
                     "persistence": {
                         "provider": "redis",
-                        "redis": {"endpoint": "redis.internal:6379", "tls": True},
+                        "redis": (
+                            {"endpoint": "", "secretName": "retail-redis", "tls": False}
+                            if environment == "aws"
+                            else {"endpoint": "redis.internal:6379", "tls": True}
+                        ),
                     }
                 },
                 "redis": {"create": False},
@@ -173,7 +178,7 @@ class ValidatorTestCase(unittest.TestCase):
                 "app": {
                     "persistence": {
                         "provider": "postgres",
-                        "endpoint": "postgres.internal:5432",
+                        "endpoint": "" if environment == "aws" else "postgres.internal:5432",
                         "database": "orders",
                         "secret": {"create": False, "name": "orders-db"},
                     },
@@ -188,7 +193,12 @@ class ValidatorTestCase(unittest.TestCase):
                 "app": {
                     "endpoints": {},
                     "session": {
-                        "redis": {"endpoint": "redis.internal:6379", "tls": False}
+                        **({"type": "redis"} if environment == "aws" else {}),
+                        "redis": (
+                            {"endpoint": "", "secretName": "retail-redis", "tls": False}
+                            if environment == "aws"
+                            else {"endpoint": "redis.internal:6379", "tls": False}
+                        ),
                     }
                 },
             },
@@ -214,7 +224,10 @@ class ValidatorTestCase(unittest.TestCase):
                         ],
                     },
                 },
-                "destination": {"name": "in-cluster", "namespace": "retail"},
+                "destination": {
+                    "name": "in-cluster",
+                    "namespace": "retail-store" if environment == "aws" else "retail",
+                },
             },
         }
 
@@ -270,6 +283,19 @@ class PositiveValidationTests(ValidatorTestCase):
 
 
 class ActualStructureStackTests(unittest.TestCase):
+    def test_actual_aws_deployment_stack_accepts_pod_identity_and_secrets(self):
+        args = [
+            "--environment", "aws", "--mode", "deployment",
+            "-f", str(REPO_ROOT / "environments/aws/values.yaml"),
+            "-f", str(REPO_ROOT / "src/app/chart/versions.yaml"),
+            "--application", str(REPO_ROOT / "applications/aws.yaml"),
+        ]
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            code = main(args, repo_root=REPO_ROOT)
+        self.assertEqual(0, code, stderr.getvalue())
+        self.assertIn("runtime unverified", stdout.getvalue())
+
     def test_actual_chart_defaults_and_structure_fixtures_validate_for_both_clouds(self):
         for environment in ("aws", "gcp"):
             with self.subTest(environment=environment):
@@ -472,7 +498,12 @@ class DeploymentValueValidationTests(ValidatorTestCase):
                     self.assertNotIn(value, stderr)
                 self.values = self.valid_values("aws")
 
-    def test_requires_external_host_port_endpoints(self):
+    def test_gcp_still_requires_external_host_port_endpoints(self):
+        self.environment = "gcp"
+        self.values_path = self.root / "environments/gcp/values.yaml"
+        self.application_path = self.root / "applications/gcp.yaml"
+        self.values = self.valid_values("gcp")
+        self.application = self.valid_application("gcp")
         cases = [
             (("checkout", "app", "persistence", "redis", "endpoint"), "redis.internal"),
             (("orders", "app", "persistence", "endpoint"), "postgres.internal"),
@@ -489,7 +520,7 @@ class DeploymentValueValidationTests(ValidatorTestCase):
                 code, _, stderr = self.invoke()
                 self.assertEqual(1, code)
                 self.assertIn("host:port", stderr)
-                self.values = self.valid_values("aws")
+                self.values = self.valid_values("gcp")
 
     def test_rejects_unsupported_providers(self):
         cases = [
@@ -538,14 +569,19 @@ class DeploymentValueValidationTests(ValidatorTestCase):
         self.assertEqual(1, code)
         self.assertIn("separately reviewed data/identity design", stderr)
 
-    def test_aws_dynamodb_requires_table_and_irsa_role_arn(self):
+    def test_aws_dynamodb_requires_external_table_and_pod_identity_account(self):
         cases = [
             (("cart", "app", "persistence", "dynamodb", "tableName"), ""),
+            (("cart", "app", "persistence", "dynamodb", "tableName"), "other-table"),
             (("cart", "app", "persistence", "dynamodb", "createTable"), True),
             (("cart", "dynamodb", "create"), True),
             (("cart", "serviceAccount", "create"), False),
+            (("cart", "serviceAccount", "name"), ""),
+            (("cart", "serviceAccount", "name"), None),
+            (("cart", "serviceAccount", "name"), "other-service-account"),
             (("cart", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn"), "not-an-arn"),
-            (("cart", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn"), " arn:aws:iam::123456789012:role/cart"),
+            (("cart", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn"), "arn:aws:iam::123456789012:role/cart"),
+            (("cart", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn"), ""),
         ]
         for path, value in cases:
             with self.subTest(path=path):
@@ -558,6 +594,86 @@ class DeploymentValueValidationTests(ValidatorTestCase):
                 self.assertEqual(1, code)
                 self.assertIn(".".join(path), stderr)
                 self.values = self.valid_values("aws")
+
+    def test_aws_pod_identity_cannot_override_table_with_another_secret(self):
+        self.values["cart"]["app"]["persistence"]["dynamodb"]["tableNameSecret"] = {
+            "name": "different-table-secret", "key": "table-name",
+        }
+        self.persist()
+        code, _, stderr = self.invoke()
+        self.assertEqual(1, code)
+        self.assertIn("cart.app.persistence.dynamodb.tableNameSecret.name", stderr)
+
+    def test_aws_secret_names_must_match_the_project_contract(self):
+        paths = [
+            ("checkout", "app", "persistence", "redis", "secretName"),
+            ("ui", "app", "session", "redis", "secretName"),
+            ("orders", "app", "persistence", "secret", "name"),
+        ]
+        for path in paths:
+            for bad_name in ("", None, "wrong-secret", "REQUIRED", ["not-a-string"]):
+                with self.subTest(path=path, bad_name=bad_name):
+                    self.values = self.valid_values("aws")
+                    target = self.values
+                    for key in path[:-1]:
+                        target = target[key]
+                    target[path[-1]] = bad_name
+                    self.persist()
+                    code, _, stderr = self.invoke()
+                    self.assertEqual(1, code)
+                    self.assertIn(".".join(path), stderr)
+                    if isinstance(bad_name, str) and bad_name:
+                        self.assertNotIn(bad_name, stderr)
+
+    def test_aws_rejects_direct_endpoints_mixed_with_secret_references(self):
+        paths = [
+            ("checkout", "app", "persistence", "redis", "endpoint"),
+            ("ui", "app", "session", "redis", "endpoint"),
+            ("orders", "app", "persistence", "endpoint"),
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                self.values = self.valid_values("aws")
+                target = self.values
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] = "sensitive-host.internal:5432"
+                self.persist()
+                code, _, stderr = self.invoke()
+                self.assertEqual(1, code)
+                self.assertIn(".".join(path), stderr)
+                self.assertIn("Secret", stderr)
+                self.assertNotIn("sensitive-host", stderr)
+
+    def test_aws_secret_reference_allows_absent_direct_endpoints(self):
+        self.values["checkout"]["app"]["persistence"]["redis"]["endpoint"] = None
+        self.values["ui"]["app"]["session"]["redis"]["endpoint"] = None
+        self.values["orders"]["app"]["persistence"]["endpoint"] = None
+        self.persist()
+        code, _, stderr = self.invoke()
+        self.assertEqual(0, code, stderr)
+
+    def test_aws_storage_modes_cannot_bypass_identity_or_secret_checks(self):
+        cases = [
+            (("cart", "app", "persistence", "provider"), "in-memory"),
+            (("orders", "app", "persistence", "provider"), "in-memory"),
+            (("ui", "app", "session", "type"), "local"),
+            (("ui", "app", "session", "type"), "auto"),
+            (("ui", "app", "session", "type"), None),
+            (("checkout", "redis", "create"), True),
+            (("orders", "postgresql", "create"), True),
+        ]
+        for path, value in cases:
+            with self.subTest(path=path):
+                self.values = self.valid_values("aws")
+                target = self.values
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] = value
+                self.persist()
+                code, _, stderr = self.invoke()
+                self.assertEqual(1, code)
+                self.assertIn(".".join(path), stderr)
 
     def test_orders_external_postgres_requires_existing_secret(self):
         self.values["orders"]["app"]["persistence"]["secret"]["create"] = True
@@ -575,6 +691,63 @@ class DeploymentValueValidationTests(ValidatorTestCase):
         self.persist()
         code, _, stderr = self.invoke()
         self.assertEqual(0, code, stderr)
+
+    def test_aws_whatap_agent_accepts_matching_namespace(self):
+        self.values["whatapAgent"] = {
+            "enabled": True, "apm": {"namespace": "retail-store"},
+        }
+        self.persist()
+
+        code, _, stderr = self.invoke()
+
+        self.assertEqual(0, code, stderr)
+
+    def test_aws_whatap_agent_rejects_invalid_namespace(self):
+        for namespace in ("retail-dev", "", None, 42, ["retail-store"], {"name": "retail-store"}):
+            with self.subTest(namespace=namespace):
+                self.values["whatapAgent"] = {
+                    "enabled": True, "apm": {"namespace": namespace},
+                }
+                self.persist()
+
+                code, _, stderr = self.invoke()
+
+                self.assertEqual(1, code)
+                self.assertIn("whatapAgent.apm.namespace", stderr)
+
+    def test_aws_whatap_agent_requires_namespace_when_enabled(self):
+        for config in ({"enabled": True}, {"enabled": True, "apm": {}}):
+            with self.subTest(config=config):
+                self.values["whatapAgent"] = config
+                self.persist()
+
+                code, _, stderr = self.invoke()
+
+                self.assertEqual(1, code)
+                self.assertIn("whatapAgent.apm.namespace", stderr)
+
+    def test_aws_whatap_agent_disabled_does_not_require_namespace(self):
+        self.values["whatapAgent"] = {"enabled": False}
+        self.persist()
+
+        code, _, stderr = self.invoke()
+
+        self.assertEqual(0, code, stderr)
+
+    def test_whatap_agent_enabled_must_be_boolean(self):
+        for enabled in ("true", "false", 1, 0, [], {}):
+            with self.subTest(enabled=enabled):
+                self.values["whatapAgent"] = {
+                    "enabled": enabled, "apm": {"namespace": "retail-store"},
+                }
+                self.persist()
+                for mode in ("structure", "deployment"):
+                    with self.subTest(mode=mode):
+                        code, _, stderr = self.invoke(mode=mode, application=(mode == "deployment"))
+
+                        self.assertEqual(1, code)
+                        self.assertIn("whatapAgent.enabled", stderr)
+                        self.assertIn("must be a boolean", stderr)
 
     def test_whatap_requires_secret_and_catalog_requires_explicit_server(self):
         for service in ("catalog", "checkout"):
@@ -654,6 +827,15 @@ class DeploymentValueValidationTests(ValidatorTestCase):
 
 
 class ApplicationValidationTests(ValidatorTestCase):
+    def test_aws_namespace_must_match_pod_identity_and_secret_namespace(self):
+        for namespace in ("retail-dev", "default", "", None):
+            with self.subTest(namespace=namespace):
+                self.application["spec"]["destination"]["namespace"] = namespace
+                self.persist()
+                code, _, stderr = self.invoke()
+                self.assertEqual(1, code)
+                self.assertIn("application.spec.destination.namespace", stderr)
+
     def test_requires_promoted_application_path(self):
         self.application_path = self.root / "other" / "aws.yaml"
         self.persist()

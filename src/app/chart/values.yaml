@@ -1,3 +1,13 @@
+whatapAgent:
+  enabled: false
+  name: whatap
+  apm:
+    targetName: retail-java
+    javaVersion: latest
+    namespace: ""
+    podNames: []
+  k8sAgent: {}
+
 cart:
   fullnameOverride: carts
 
