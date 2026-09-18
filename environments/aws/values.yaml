@@ -1,5 +1,27 @@
 # Verified against Helm retail-dev and live retail-dev-eks resources, 2026-09-16.
 # Credentials remain in existing Kubernetes Secrets and ExternalSecrets.
+whatapAgent:
+  enabled: true
+  name: whatap
+  apm:
+    targetName: retail-java
+    javaVersion: latest
+    namespace: retail-dev
+    podNames:
+      - carts
+      - orders
+      - ui
+  k8sAgent:
+    customImageFullName: public.ecr.aws/whatap/kube_mon:1.8.7
+    masterAgent:
+      enabled: true
+    nodeAgent:
+      enabled: true
+      runtime: containerd
+      runtimeSocketPath: /var/run/containerd/containerd.sock
+    gpuMonitoring:
+      enabled: false
+
 cart:
   image:
     repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-cart
