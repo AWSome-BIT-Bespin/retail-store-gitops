@@ -22,6 +22,7 @@ cart:
     create: true
     name: carts-dynamo-sa
     annotations: {}
+  
 
 catalog:
   # 기존 기본값(autoscaling=true) 대신 DR에서는 단일 고정 Pod를 사용합니다.
@@ -46,6 +47,12 @@ catalog:
     create: true
     name: catalog-sa
     annotations: {}
+  whatap:
+    enabled: false
+   #secretName: whatap-credentials
+   #serverHost: 13.124.11.223/13.209.172.35
+   #appName: catalog
+   #okind: catalog
 
 checkout:
   # 기존 기본값(autoscaling=true) 대신 DR에서는 단일 고정 Pod를 사용합니다.
@@ -58,7 +65,7 @@ checkout:
   app:
     persistence:
       # 공통 기본값(redis)과 분리하여 GKE DR은 메모리 저장소를 사용합니다.
-      provider: in-memory
+      provider: redis
       redis:
         endpoint: ""
         secretName: ""
@@ -68,19 +75,24 @@ checkout:
       orders: http://orders:80
   redis:
     # GKE DR에서는 Redis를 생성하지 않습니다.
-    create: false
-  whatap:
-    # DR 클러스터에 Whatap Secret이 없으므로 비활성화합니다.
-    enabled: false
+    create: true
+    service:
+      type: ClusterIP
+      port: 6379
   # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
   serviceAccount:
     create: true
     name: checkout-sa
     annotations: {}
+  whatap:
+    enabled: false
+    #secretName: whatap-credentials
+    #serverHost: 13.124.11.223/13.209.172.35
+    #okind: checkout
 
 orders:
   # DMS CDC 중에는 GKE Orders Pod를 실행하지 않습니다.
-  replicaCount: 0
+  replicaCount: 0 
   autoscaling:
     enabled: false
   image:
@@ -91,7 +103,7 @@ orders:
       # 공통 기본값(in-memory)에서 외부 GCP PostgreSQL 사용으로 지정합니다.
       provider: postgres
       # GCP DR PostgreSQL endpoint는 아직 확인되지 않아 비워 둡니다.
-      endpoint: ""
+      endpoint: "10.40.0.3:5432"
       database: orders
       secret:
         # 외부 PostgreSQL 연결 Secret orders-db를 사용합니다.
@@ -132,18 +144,26 @@ ui:
       orders: http://orders:80
     session:
       # GKE DR은 Redis 없이 Local Session을 사용합니다.
-      type: local
+      type: redis
       redis:
         # Redis session을 사용하지 않습니다.
-        endpoint: ""
+        endpoint: checkout-redis:6379
         secretName: ""
   ingress:
     # AWS ALB Ingress 대신 GKE LoadBalancer Service를 사용합니다.
     enabled: false
+    className: ""
+    annotations:
+      alb.ingress.kubernetes.io/load-balancer-name: null
+      alb.ingress.kubernetes.io/scheme: null
+      alb.ingress.kubernetes.io/target-type: null
+      alb.ingress.kubernetes.io/healthcheck-path: null
   service:
     # 공통 기본값(ClusterIP) 대신 GKE LoadBalancer Service를 사용합니다.
     type: LoadBalancer
     port: 80
+    annotations:
+      cloud.google.com/l4-rbs: "enabled"
   # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
   serviceAccount:
     create: true
