@@ -103,7 +103,7 @@ orders:
       # 공통 기본값(in-memory)에서 외부 GCP PostgreSQL 사용으로 지정합니다.
       provider: postgres
       # GCP DR PostgreSQL endpoint는 아직 확인되지 않아 비워 둡니다.
-      endpoint: "10.40.0.3:5432"
+      endpoint: "retail-infra-postgres.cmnrhpznom2o.ap-northeast-2.rds.amazonaws.com:5432"
       database: orders
       secret:
         # 외부 PostgreSQL 연결 Secret orders-db를 사용합니다.
