@@ -219,7 +219,7 @@ class ValidatorTestCase(unittest.TestCase):
                     "helm": {
                         "releaseName": "retail-store",
                         "valueFiles": [
-                            f"../../../environments/{environment}/values.yaml",
+                            f"../../../environments/{environment}/{'values-dr.yaml' if environment == 'gcp' else 'values.yaml'}",
                             "versions.yaml",
                         ],
                     },
@@ -260,7 +260,7 @@ class PositiveValidationTests(ValidatorTestCase):
         self.assertIn("runtime unverified", stdout)
     def test_accepts_complete_gcp_deployment_inputs(self):
         self.environment = "gcp"
-        self.values_path = self.root / "environments" / "gcp" / "values.yaml"
+        self.values_path = self.root / "environments" / "gcp" / "values-dr.yaml"
         self.application_path = self.root / "applications" / "gcp.yaml"
         self.values = self.valid_values("gcp")
         self.application = self.valid_application("gcp")
@@ -422,7 +422,7 @@ class YamlAndTypeValidationTests(ValidatorTestCase):
 
     def test_null_overlay_deletes_inherited_annotation(self):
         self.environment = "gcp"
-        self.values_path = self.root / "environments" / "gcp" / "values.yaml"
+        self.values_path = self.root / "environments" / "gcp" / "values-dr.yaml"
         self.application_path = self.root / "applications" / "gcp.yaml"
         self.values = self.valid_values("gcp")
         self.values["ui"]["ingress"]["annotations"] = {
@@ -500,7 +500,7 @@ class DeploymentValueValidationTests(ValidatorTestCase):
 
     def test_gcp_still_requires_external_host_port_endpoints(self):
         self.environment = "gcp"
-        self.values_path = self.root / "environments/gcp/values.yaml"
+        self.values_path = self.root / "environments/gcp/values-dr.yaml"
         self.application_path = self.root / "applications/gcp.yaml"
         self.values = self.valid_values("gcp")
         self.application = self.valid_application("gcp")
@@ -543,7 +543,7 @@ class DeploymentValueValidationTests(ValidatorTestCase):
 
     def test_gcp_requires_explicit_supported_cart_provider(self):
         self.environment = "gcp"
-        self.values_path = self.root / "environments" / "gcp" / "values.yaml"
+        self.values_path = self.root / "environments" / "gcp" / "values-dr.yaml"
         self.application_path = self.root / "applications" / "gcp.yaml"
         self.values = self.valid_values("gcp")
         self.values["cart"]["app"]["persistence"]["provider"] = ""
@@ -557,7 +557,7 @@ class DeploymentValueValidationTests(ValidatorTestCase):
 
     def test_gcp_dynamodb_requires_a_separately_reviewed_design(self):
         self.environment = "gcp"
-        self.values_path = self.root / "environments" / "gcp" / "values.yaml"
+        self.values_path = self.root / "environments" / "gcp" / "values-dr.yaml"
         self.application_path = self.root / "applications" / "gcp.yaml"
         self.values = self.valid_values("gcp")
         self.values["cart"]["app"]["persistence"]["provider"] = "dynamodb"
@@ -777,7 +777,7 @@ class DeploymentValueValidationTests(ValidatorTestCase):
 
     def test_rejects_aws_specific_settings_in_gcp_structure_and_deployment(self):
         self.environment = "gcp"
-        self.values_path = self.root / "environments" / "gcp" / "values.yaml"
+        self.values_path = self.root / "environments" / "gcp" / "values-dr.yaml"
         self.application_path = self.root / "applications" / "gcp.yaml"
         self.values = self.valid_values("gcp")
         self.application = self.valid_application("gcp")
