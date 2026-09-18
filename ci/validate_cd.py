@@ -20,6 +20,11 @@ REGISTRIES = {
     "aws": "350606136784.dkr.ecr.ap-northeast-2.amazonaws.com",
     "gcp": "asia-northeast3-docker.pkg.dev/kdt4-3/retail-store",
 }
+ENVIRONMENT_VALUES = {
+    "aws": "environments/aws/values.yaml",
+    "gcp": "environments/gcp/values-dr.yaml",
+}
+VERSIONS_FILE = "src/app/chart/versions.yaml"
 # Project-specific AWS contract, reviewed against Infra terraform-moduels
 # (11f8d31) pod-identity.tf and cluster-kws (332d196) yaml/ESO.yaml.
 # These names are deliberate expectations, not inferred from missing IRSA
@@ -380,6 +385,22 @@ def validate_aws_connections(values, errors):
         errors.add(".".join(override_path), "must be empty or absent so the approved AWS table is not overridden")
 
 
+def validate_internal_gcp_redis(values, errors):
+    """The chart generates the Redis URL; reject competing external inputs."""
+    for path in (
+        ("checkout", "app", "persistence", "redis", "endpoint"),
+        ("checkout", "app", "persistence", "redis", "secretName"),
+        ("ui", "app", "session", "redis", "secretName"),
+    ):
+        if get_path(values, path) not in (MISSING, ""):
+            errors.add(".".join(path), "must be empty or absent when GCP uses the chart-managed Redis")
+    if get_path(values, ("checkout", "app", "persistence", "redis", "tls")) is not False:
+        errors.add("checkout.app.persistence.redis.tls", "must be false because the internal Redis chart does not configure TLS")
+    port = get_path(values, ("checkout", "redis", "service", "port"))
+    if type(port) is not int or not 1 <= port <= 65535:
+        errors.add("checkout.redis.service.port", "must be an integer between 1 and 65535")
+
+
 def validate_deployment_values(values, environment, supplied_documents, supplied_paths, errors):
     for path in supplied_paths:
         if is_forbidden_deployment_path(path):
@@ -411,15 +432,19 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
 
     checkout_provider = get_path(values, ("checkout", "app", "persistence", "provider"))
     if checkout_provider == "redis":
-        if get_path(values, ("checkout", "redis", "create")) is not False:
+        create_redis = get_path(values, ("checkout", "redis", "create"))
+        internal_redis = environment == "gcp" and create_redis is True
+        if internal_redis:
+            validate_internal_gcp_redis(values, errors)
+        elif create_redis is not False:
             errors.add("checkout.redis.create", "must be false for the external deployment Redis")
-        if environment != "aws":
+        if environment != "aws" and not internal_redis:
             validate_host_port(get_path(values, ("checkout", "app", "persistence", "redis", "endpoint")), ("checkout", "app", "persistence", "redis", "endpoint"), errors)
         tls = get_path(values, ("checkout", "app", "persistence", "redis", "tls"))
         if not isinstance(tls, bool):
             errors.add("checkout.app.persistence.redis.tls", "must be a boolean")
     else:
-        errors.add("checkout.app.persistence.provider", "must select external redis for deployment")
+        errors.add("checkout.app.persistence.provider", "must select redis for deployment")
 
     if environment != "aws":
         validate_host_port(get_path(values, ("ui", "app", "session", "redis", "endpoint")), ("ui", "app", "session", "redis", "endpoint"), errors)
@@ -475,6 +500,12 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
                 errors.require_string(values, (service, "whatap", "serverHost"), actual=True)
 
 
+def validate_input_stack(environment, repo_root, supplied_paths, errors):
+    expected = [(repo_root / path).resolve() for path in (ENVIRONMENT_VALUES[environment], VERSIONS_FILE)]
+    if [path.resolve() for path in supplied_paths] != expected:
+        errors.add("-f input stack", "must list the environment values and versions.yaml in the required order")
+
+
 def validate_application(application, environment, repo_root, supplied_paths, errors):
     if "operation" in application:
         errors.add(
@@ -502,13 +533,11 @@ def validate_application(application, environment, repo_root, supplied_paths, er
         elif is_fake(value):
             errors.add(dotted, "must contain a non-placeholder value")
 
-    expected_value_files = [f"../../../environments/{environment}/values.yaml", "versions.yaml"]
+    expected_value_files = [f"../../../{ENVIRONMENT_VALUES[environment]}", "versions.yaml"]
     if get_path(application, ("spec", "source", "helm", "valueFiles")) != expected_value_files:
         errors.add("application.spec.source.helm.valueFiles", "must list the environment values and versions.yaml in the required order")
 
-    expected_inputs = [(repo_root / "environments" / environment / "values.yaml").resolve(), (repo_root / "src" / "app" / "chart" / "versions.yaml").resolve()]
-    if [path.resolve() for path in supplied_paths] != expected_inputs:
-        errors.add("-f input stack", "must resolve to the same two files used by the Application")
+    validate_input_stack(environment, repo_root, supplied_paths, errors)
 
     destination = get_path(application, ("spec", "destination"))
     if isinstance(destination, dict):
@@ -562,7 +591,7 @@ def validate_application(application, environment, repo_root, supplied_paths, er
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--environment", choices=("aws", "gcp"), required=True)
-    parser.add_argument("--mode", choices=("structure", "deployment"), required=True)
+    parser.add_argument("--mode", choices=("structure", "values", "deployment"), required=True)
     parser.add_argument("-f", "--file", action="append", required=True, dest="files")
     parser.add_argument("--application")
     return parser
@@ -575,8 +604,13 @@ def main(argv=None, *, repo_root=None):
     errors = ValidationErrors()
     values, supplied_documents = load_values_stack(root, supplied_paths, errors)
     validate_structure(values, args.environment, supplied_documents, errors)
-    if args.mode == "deployment":
+    if args.mode in ("values", "deployment"):
         validate_deployment_values(values, args.environment, supplied_documents, supplied_paths, errors)
+    if args.mode == "values":
+        validate_input_stack(args.environment, root, supplied_paths, errors)
+        if args.application is not None:
+            errors.add("--application", "use deployment mode to validate an Argo CD Application")
+    if args.mode == "deployment":
         if args.application is None:
             errors.add("--application", "is required in deployment mode")
         else:
@@ -599,8 +633,11 @@ def main(argv=None, *, repo_root=None):
         for error in errors.items:
             print(f"- {error}", file=sys.stderr)
         return 1
-    message = "structural validation succeeded" if args.mode == "structure" else "deployment input validation succeeded"
-    print(f"offline {message}; runtime unverified")
+    if args.mode == "values":
+        print("offline values validation succeeded; Argo CD Application and runtime unverified")
+    else:
+        message = "structural validation succeeded" if args.mode == "structure" else "deployment input validation succeeded"
+        print(f"offline {message}; runtime unverified")
     return 0
 
 
