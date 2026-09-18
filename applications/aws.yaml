@@ -19,7 +19,7 @@ spec:
         - versions.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: retail-dev
+    namespace: retail-store
   ignoreDifferences:
     - group: apps
       kind: Deployment

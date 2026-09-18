@@ -1,0 +1,33 @@
+{{- if .Values.whatapAgent.enabled }}
+{{- $apm := .Values.whatapAgent.apm }}
+# WhaTap APM auto-installation configuration:
+# https://docs.whatap.io/kubernetes/install-auto-application-agent
+apiVersion: monitoring.whatap.com/v2alpha1
+kind: WhatapAgent
+metadata:
+  name: {{ .Values.whatapAgent.name | default "whatap" | quote }}
+spec:
+  features:
+    apm:
+      instrumentation:
+        enabled: true
+        targets:
+          - name: {{ required "whatapAgent.apm.targetName is required" $apm.targetName | quote }}
+            enabled: true
+            language: java
+            whatapApmVersions:
+              java: {{ required "whatapAgent.apm.javaVersion is required" $apm.javaVersion | quote }}
+            namespaceSelector:
+              matchNames:
+                - {{ required "whatapAgent.apm.namespace is required" $apm.namespace | quote }}
+            podSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    {{- toYaml $apm.podNames | nindent 20 }}
+            config:
+              mode: default
+    k8sAgent:
+      {{- toYaml .Values.whatapAgent.k8sAgent | nindent 6 }}
+{{- end }}
