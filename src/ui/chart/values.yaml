@@ -67,6 +67,7 @@ autoscaling:
           value: 4
           periodSeconds: 15
       selectPolicy: Max
+      
   targetCPUUtilizationPercentage: 70
 
 nodeSelector: {}
