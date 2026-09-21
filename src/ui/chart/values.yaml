@@ -57,16 +57,16 @@ autoscaling:
   maxReplicas: 10
 
   behavior:
-  scaleUp:
-    stabilizationWindowSeconds: 0
-    policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
-      - type: Pods
-        value: 4
-        periodSeconds: 15
-    selectPolicy: Max
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
   targetCPUUtilizationPercentage: 70
 
 nodeSelector: {}
