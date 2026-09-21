@@ -20,6 +20,26 @@ REGISTRIES = {
     "aws": "350606136784.dkr.ecr.ap-northeast-2.amazonaws.com",
     "gcp": "asia-northeast3-docker.pkg.dev/kdt4-3/retail-store",
 }
+ENVIRONMENT_VALUES = {
+    "aws": "environments/aws/values.yaml",
+    "gcp": "environments/gcp/values-dr.yaml",
+}
+VERSIONS_FILE = "src/app/chart/versions.yaml"
+# Project-specific AWS contract, reviewed against Infra terraform-moduels
+# (11f8d31) pod-identity.tf and cluster-kws (332d196) yaml/ESO.yaml.
+# These names are deliberate expectations, not inferred from missing IRSA
+# annotations. Offline checks cannot prove the association/Secrets exist.
+AWS_NAMESPACE = "retail-store"
+AWS_CONNECTION_VALUES = {
+    ("cart", "app", "persistence", "provider"): "dynamodb",
+    ("cart", "app", "persistence", "dynamodb", "tableName"): "retail-store-cart",
+    ("cart", "serviceAccount", "name"): "carts-dynamo-sa",
+    ("checkout", "app", "persistence", "redis", "secretName"): "retail-redis",
+    ("ui", "app", "session", "type"): "redis",
+    ("ui", "app", "session", "redis", "secretName"): "retail-redis",
+    ("orders", "app", "persistence", "provider"): "postgres",
+    ("orders", "app", "persistence", "secret", "name"): "orders-db",
+}
 PROVIDERS = {
     ("cart", "app", "persistence", "provider"): {"in-memory", "dynamodb"},
     ("catalog", "app", "persistence", "provider"): {"in-memory", "mysql"},
@@ -30,6 +50,7 @@ PROVIDERS = {
     ("ui", "app", "chat", "provider"): {"", "openai", "bedrock"},
 }
 BOOLEAN_PATHS = {
+    ("whatapAgent", "enabled"),
     *((service, section, key) for service in SERVICES for section, key in (
         ("serviceAccount", "create"),
         ("autoscaling", "enabled"),
@@ -66,7 +87,6 @@ BOOLEAN_PATHS = {
 }
 IMMUTABLE_TAG = re.compile(r"^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 HOST_PORT = re.compile(r"^(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9][A-Za-z0-9._-]*):(?:[1-9]\d{0,4})$")
-IRSA_ROLE = re.compile(r"^arn:aws:iam::(\d{12}):role/[A-Za-z0-9+=,.@_/-]+$")
 MISSING = object()
 
 
@@ -333,6 +353,54 @@ def is_forbidden_deployment_path(path: Path) -> bool:
     )
 
 
+def validate_aws_connections(values, errors):
+    """Check the approved AWS Pod Identity/ESO references, never secret values."""
+    for path, expected in AWS_CONNECTION_VALUES.items():
+        if get_path(values, path) != expected:
+            errors.add(".".join(path), f"must be {expected} for the approved AWS connection configuration")
+
+    if get_path(values, ("whatapAgent", "enabled")) is True:
+        namespace_path = ("whatapAgent", "apm", "namespace")
+        if get_path(values, namespace_path) != AWS_NAMESPACE:
+            errors.add(".".join(namespace_path), f"must be {AWS_NAMESPACE} for the approved AWS deployment")
+
+    # Orders envFrom can be overwritten by its ConfigMap; Redis charts prefer
+    # their Secret over a direct endpoint. Reject both kinds of mixed input.
+    for path in (
+        ("checkout", "app", "persistence", "redis", "endpoint"),
+        ("ui", "app", "session", "redis", "endpoint"),
+        ("orders", "app", "persistence", "endpoint"),
+    ):
+        endpoint = get_path(values, path)
+        if endpoint is not MISSING and endpoint != "":
+            errors.add(".".join(path), "must be empty or absent because AWS uses the external Secret")
+
+    role_path = ("cart", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn")
+    if has_path(values, role_path):
+        errors.add(".".join(role_path), "must be absent because the approved AWS identity mode is Pod Identity")
+
+    override_path = ("cart", "app", "persistence", "dynamodb", "tableNameSecret", "name")
+    override = get_path(values, override_path)
+    if override is not MISSING and override != "":
+        errors.add(".".join(override_path), "must be empty or absent so the approved AWS table is not overridden")
+
+
+def validate_internal_gcp_redis(values, errors):
+    """The chart generates the Redis URL; reject competing external inputs."""
+    for path in (
+        ("checkout", "app", "persistence", "redis", "endpoint"),
+        ("checkout", "app", "persistence", "redis", "secretName"),
+        ("ui", "app", "session", "redis", "secretName"),
+    ):
+        if get_path(values, path) not in (MISSING, ""):
+            errors.add(".".join(path), "must be empty or absent when GCP uses the chart-managed Redis")
+    if get_path(values, ("checkout", "app", "persistence", "redis", "tls")) is not False:
+        errors.add("checkout.app.persistence.redis.tls", "must be false because the internal Redis chart does not configure TLS")
+    port = get_path(values, ("checkout", "redis", "service", "port"))
+    if type(port) is not int or not 1 <= port <= 65535:
+        errors.add("checkout.redis.service.port", "must be an integer between 1 and 65535")
+
+
 def validate_deployment_values(values, environment, supplied_documents, supplied_paths, errors):
     for path in supplied_paths:
         if is_forbidden_deployment_path(path):
@@ -359,18 +427,27 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
         elif value not in supported:
             errors.add(".".join(path), "is not supported by the current chart")
 
+    if environment == "aws":
+        validate_aws_connections(values, errors)
+
     checkout_provider = get_path(values, ("checkout", "app", "persistence", "provider"))
     if checkout_provider == "redis":
-        if get_path(values, ("checkout", "redis", "create")) is not False:
+        create_redis = get_path(values, ("checkout", "redis", "create"))
+        internal_redis = environment == "gcp" and create_redis is True
+        if internal_redis:
+            validate_internal_gcp_redis(values, errors)
+        elif create_redis is not False:
             errors.add("checkout.redis.create", "must be false for the external deployment Redis")
-        validate_host_port(get_path(values, ("checkout", "app", "persistence", "redis", "endpoint")), ("checkout", "app", "persistence", "redis", "endpoint"), errors)
+        if environment != "aws" and not internal_redis:
+            validate_host_port(get_path(values, ("checkout", "app", "persistence", "redis", "endpoint")), ("checkout", "app", "persistence", "redis", "endpoint"), errors)
         tls = get_path(values, ("checkout", "app", "persistence", "redis", "tls"))
         if not isinstance(tls, bool):
             errors.add("checkout.app.persistence.redis.tls", "must be a boolean")
     else:
-        errors.add("checkout.app.persistence.provider", "must select external redis for deployment")
+        errors.add("checkout.app.persistence.provider", "must select redis for deployment")
 
-    validate_host_port(get_path(values, ("ui", "app", "session", "redis", "endpoint")), ("ui", "app", "session", "redis", "endpoint"), errors)
+    if environment != "aws":
+        validate_host_port(get_path(values, ("ui", "app", "session", "redis", "endpoint")), ("ui", "app", "session", "redis", "endpoint"), errors)
     ui_tls = get_path(values, ("ui", "app", "session", "redis", "tls"))
     if ui_tls is True:
         errors.add("ui.app.session.redis.tls", "true is unsupported because the current UI chart always emits redis://")
@@ -380,7 +457,8 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
     if get_path(values, ("orders", "app", "persistence", "provider")) == "postgres":
         if get_path(values, ("orders", "postgresql", "create")) is not False:
             errors.add("orders.postgresql.create", "must be false for external Postgres")
-        validate_host_port(get_path(values, ("orders", "app", "persistence", "endpoint")), ("orders", "app", "persistence", "endpoint"), errors)
+        if environment != "aws":
+            validate_host_port(get_path(values, ("orders", "app", "persistence", "endpoint")), ("orders", "app", "persistence", "endpoint"), errors)
         errors.require_string(values, ("orders", "app", "persistence", "database"), actual=True)
         if get_path(values, ("orders", "app", "persistence", "secret", "create")) is not False:
             errors.add("orders.app.persistence.secret.create", "must be false so an existing Secret is referenced")
@@ -405,17 +483,9 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
         if get_path(values, ("cart", "serviceAccount", "create")) is not True:
             errors.add(
                 "cart.serviceAccount.create",
-                "must be true so the current chart emits the IRSA-annotated ServiceAccount",
+                "must be true so the current chart emits the Pod Identity ServiceAccount",
             )
         errors.require_string(values, ("cart", "app", "persistence", "dynamodb", "tableName"), actual=True)
-        role_path = ("cart", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn")
-        role = get_path(values, role_path)
-        if not isinstance(role, str) or is_fake(role):
-            errors.add(".".join(role_path), "must contain a non-placeholder IRSA role ARN")
-        else:
-            match = IRSA_ROLE.fullmatch(role)
-            if match is None or match.group(1) == "000000000000":
-                errors.add(".".join(role_path), "must be a valid non-placeholder IRSA role ARN")
     if environment == "gcp" and cart_provider != "in-memory":
         errors.add(
             "cart.app.persistence.provider",
@@ -428,6 +498,12 @@ def validate_deployment_values(values, environment, supplied_documents, supplied
             host = get_path(values, (service, "whatap", "serverHost"))
             if service == "catalog" or host not in (MISSING, None, ""):
                 errors.require_string(values, (service, "whatap", "serverHost"), actual=True)
+
+
+def validate_input_stack(environment, repo_root, supplied_paths, errors):
+    expected = [(repo_root / path).resolve() for path in (ENVIRONMENT_VALUES[environment], VERSIONS_FILE)]
+    if [path.resolve() for path in supplied_paths] != expected:
+        errors.add("-f input stack", "must list the environment values and versions.yaml in the required order")
 
 
 def validate_application(application, environment, repo_root, supplied_paths, errors):
@@ -443,6 +519,8 @@ def validate_application(application, environment, repo_root, supplied_paths, er
         ("spec", "source", "repoURL"): REPOSITORY,
         ("spec", "source", "path"): "src/app/chart",
     }
+    if environment == "aws":
+        exact_values[("spec", "destination", "namespace")] = AWS_NAMESPACE
     for path, expected in exact_values.items():
         if get_path(application, path) != expected:
             errors.add("application." + ".".join(path), "has an unexpected value")
@@ -455,13 +533,11 @@ def validate_application(application, environment, repo_root, supplied_paths, er
         elif is_fake(value):
             errors.add(dotted, "must contain a non-placeholder value")
 
-    expected_value_files = [f"../../../environments/{environment}/values.yaml", "versions.yaml"]
+    expected_value_files = [f"../../../{ENVIRONMENT_VALUES[environment]}", "versions.yaml"]
     if get_path(application, ("spec", "source", "helm", "valueFiles")) != expected_value_files:
         errors.add("application.spec.source.helm.valueFiles", "must list the environment values and versions.yaml in the required order")
 
-    expected_inputs = [(repo_root / "environments" / environment / "values.yaml").resolve(), (repo_root / "src" / "app" / "chart" / "versions.yaml").resolve()]
-    if [path.resolve() for path in supplied_paths] != expected_inputs:
-        errors.add("-f input stack", "must resolve to the same two files used by the Application")
+    validate_input_stack(environment, repo_root, supplied_paths, errors)
 
     destination = get_path(application, ("spec", "destination"))
     if isinstance(destination, dict):
@@ -515,7 +591,7 @@ def validate_application(application, environment, repo_root, supplied_paths, er
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--environment", choices=("aws", "gcp"), required=True)
-    parser.add_argument("--mode", choices=("structure", "deployment"), required=True)
+    parser.add_argument("--mode", choices=("structure", "values", "deployment"), required=True)
     parser.add_argument("-f", "--file", action="append", required=True, dest="files")
     parser.add_argument("--application")
     return parser
@@ -528,8 +604,13 @@ def main(argv=None, *, repo_root=None):
     errors = ValidationErrors()
     values, supplied_documents = load_values_stack(root, supplied_paths, errors)
     validate_structure(values, args.environment, supplied_documents, errors)
-    if args.mode == "deployment":
+    if args.mode in ("values", "deployment"):
         validate_deployment_values(values, args.environment, supplied_documents, supplied_paths, errors)
+    if args.mode == "values":
+        validate_input_stack(args.environment, root, supplied_paths, errors)
+        if args.application is not None:
+            errors.add("--application", "use deployment mode to validate an Argo CD Application")
+    if args.mode == "deployment":
         if args.application is None:
             errors.add("--application", "is required in deployment mode")
         else:
@@ -552,8 +633,11 @@ def main(argv=None, *, repo_root=None):
         for error in errors.items:
             print(f"- {error}", file=sys.stderr)
         return 1
-    message = "structural validation succeeded" if args.mode == "structure" else "deployment input validation succeeded"
-    print(f"offline {message}; runtime unverified")
+    if args.mode == "values":
+        print("offline values validation succeeded; Argo CD Application and runtime unverified")
+    else:
+        message = "structural validation succeeded" if args.mode == "structure" else "deployment input validation succeeded"
+        print(f"offline {message}; runtime unverified")
     return 0
 
 

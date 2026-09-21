@@ -44,12 +44,25 @@ resources:
     memory: 256Mi
   requests:
     cpu: 64m
-    memory: 128Mi
+    memory: 192Mi
 
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 10
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+    selectPolicy: Max
+
   targetCPUUtilizationPercentage: 75
   # targetMemoryUtilizationPercentage: 80
 

@@ -1,12 +1,11 @@
-# Verified against Helm retail-dev and live retail-dev-eks resources, 2026-09-16.
-# Credentials remain in existing Kubernetes Secrets and ExternalSecrets.
+
 whatapAgent:
   enabled: true
   name: whatap
   apm:
     targetName: retail-java
     javaVersion: latest
-    namespace: retail-dev
+    namespace: retail-store
     podNames:
       - carts
       - orders
@@ -23,37 +22,32 @@ whatapAgent:
       enabled: false
 
 cart:
-  image:
-    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-cart
   app:
     persistence:
       provider: dynamodb
       dynamodb:
-        tableName: retail-dev-cart
+        tableName: retail-store-cart
         createTable: false
-        tableNameSecret:
-          name: retail-runtime-config
-          key: RETAIL_CART_PERSISTENCE_DYNAMODB_TABLE_NAME
   dynamodb:
     create: false
+
+  # 기존: create=false, name=carts-dynamo
+  # 변경: Helm에서 carts-dynamo-sa 생성(Pod Identity용 annotation 없음)
   serviceAccount:
     create: true
-    name: retail-dev-cart
-    annotations:
-      eks.amazonaws.com/role-arn: arn:aws:iam::350606136784:role/RetailDevCartDynamoDBRole
+    name: carts-dynamo-sa
+    annotations: {}
 
 catalog:
-  image:
-    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-catalog
-  metrics:
-    enabled: true
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "8080"
-      prometheus.io/path: /metrics
   app:
     persistence:
       provider: in-memory
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 catalog-sa 생성
+  serviceAccount:
+    create: true
+    name: catalog-sa
+    annotations: {}
   whatap:
     enabled: true
     secretName: whatap-credentials
@@ -61,83 +55,80 @@ catalog:
     appName: catalog
     okind: catalog
 
+
 checkout:
-  image:
-    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-checkout
-  metrics:
-    enabled: true
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "8080"
-      prometheus.io/path: /metrics
   app:
     persistence:
       provider: redis
       redis:
-        endpoint: retail-dev-valkey.lk6esl.ng.0001.apn2.cache.amazonaws.com:6379
-        secretName: ""
+        endpoint: ""
+        secretName: retail-redis
         tls: false
     endpoints:
       orders: http://orders:80
   redis:
     create: false
+
   whatap:
     enabled: true
     secretName: whatap-credentials
     serverHost: 13.124.11.223/13.209.172.35
     okind: checkout
 
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 checkout-sa 생성
+  serviceAccount:
+    create: true
+    name: checkout-sa
+    annotations: {}
+
+
 orders:
-  image:
-    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-orders
-  metrics:
-    enabled: true
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "8080"
-      prometheus.io/path: /actuator/prometheus
   app:
     persistence:
       provider: postgres
-      endpoint: retail-dev-orders.cmnrhpznom2o.ap-northeast-2.rds.amazonaws.com:5432
+      endpoint: ""
       database: orders
       secret:
         create: false
         name: orders-db
+
     messaging:
       provider: in-memory
       rabbitmq:
         secret:
           create: false
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 orders-sa 생성
+  serviceAccount:
+    create: true
+    name: orders-sa
+    annotations: {}
+
   postgresql:
     create: false
+
   rabbitmq:
     create: false
 
 ui:
-  image:
-    repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-ui
-  metrics:
-    enabled: true
-    podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "8080"
-      prometheus.io/path: /actuator/prometheus
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 5
-    targetCPUUtilizationPercentage: 80
   service:
     type: ClusterIP
   ingress:
     enabled: true
     className: alb
-    annotations:
-      alb.ingress.kubernetes.io/load-balancer-name: retail-dev-alb
   app:
     session:
+      # AWS는 기존 ElastiCache Redis Session을 명시적으로 사용합니다.
+      type: redis
       redis:
-        endpoint: retail-dev-valkey.lk6esl.ng.0001.apn2.cache.amazonaws.com:6379
-        secretName: ""
+        endpoint: ""
+        secretName: retail-redis
         tls: false
+
+  # 기존: 서비스 어카운트 명시 설정 없음
+  # 변경: Helm에서 ui-sa 생성
+  serviceAccount:
+    create: true
+    name: ui-sa
+    annotations: {}

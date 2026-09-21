@@ -6,6 +6,97 @@ from pathlib import Path
 import yaml
 
 
+def _field(document, *keys):
+    for key in keys:
+        if not isinstance(document, dict):
+            return None
+        document = document.get(key)
+    return document
+
+
+def _mappings(value):
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _container_value(container, variable, namespace, objects):
+    """Resolve a literal env value or referenced ConfigMap; never read Secrets."""
+    explicit = [entry for entry in _mappings(container.get('env')) if entry.get('name') == variable]
+    if explicit:
+        if len(explicit) != 1 or 'valueFrom' in explicit[0]:
+            return None
+        return explicit[0].get('value')
+    value = None
+    for source in _mappings(container.get('envFrom')):
+        prefix = source.get('prefix', '')
+        if not isinstance(prefix, str):
+            return None
+        if not variable.startswith(prefix):
+            continue
+        if 'secretRef' in source:
+            return None  # The effective value cannot be proved offline.
+        name = _field(source, 'configMapRef', 'name')
+        if not name:
+            continue
+        configs = [doc for doc in objects if doc.get('kind') == 'ConfigMap'
+                   and _field(doc, 'metadata', 'name') == name
+                   and (_field(doc, 'metadata', 'namespace') or '') == namespace]
+        if len(configs) != 1:
+            return None
+        data = configs[0].get('data')
+        key = variable[len(prefix):]
+        if isinstance(data, dict) and key in data:
+            value = data[key]
+    return value
+
+
+def check_gcp_internal_redis(objects):
+    """Check shared Redis only when this render contains chart-managed Redis.
+
+    External Redis renders have no such Service/Deployment and retain their
+    existing checks. This is a wiring check, not proof that Redis is healthy.
+    """
+    objects = [doc for doc in objects if isinstance(doc, dict)]
+    internal = [doc for doc in objects if doc.get('kind') in ('Service', 'Deployment')
+                and _field(doc, 'metadata', 'labels', 'app.kubernetes.io/component') == 'redis'
+                and _field(doc, 'metadata', 'labels', 'app.kubernetes.io/owner') == 'retail-store-sample']
+    if not internal:
+        return []
+    services = [doc for doc in internal if doc['kind'] == 'Service']
+    deployments = [doc for doc in internal if doc['kind'] == 'Deployment']
+    if len(services) != 1 or len(deployments) != 1:
+        return ['GCP internal Redis: must render exactly one Redis Service and Deployment']
+    service, deployment = services[0], deployments[0]
+    name = _field(service, 'metadata', 'name')
+    namespace = _field(service, 'metadata', 'namespace') or ''
+    ports = [item.get('port') for item in _mappings(_field(service, 'spec', 'ports'))
+             if item.get('name') == 'redis']
+    if not isinstance(name, str) or not name or len(ports) != 1 or type(ports[0]) is not int or not 1 <= ports[0] <= 65535:
+        return ['GCP internal Redis: Service must have a name and one valid Redis port']
+    labels = _field(deployment, 'spec', 'template', 'metadata', 'labels')
+    selector = _field(service, 'spec', 'selector')
+    if (not isinstance(selector, dict) or not selector or not isinstance(labels, dict)
+            or not all(labels.get(key) == value for key, value in selector.items())
+            or (_field(deployment, 'metadata', 'namespace') or '') != namespace):
+        return ['GCP internal Redis: Service selector and namespace must target the Redis Deployment']
+
+    errors = []
+    expected_url = f'redis://{name}:{ports[0]}'
+    for role, variable in (('checkout', 'RETAIL_CHECKOUT_PERSISTENCE_REDIS_URL'), ('ui', 'SPRING_DATA_REDIS_URL')):
+        containers = [container for doc in objects if doc.get('kind') == 'Deployment'
+                      and (_field(doc, 'metadata', 'namespace') or '') == namespace
+                      for container in _mappings(_field(doc, 'spec', 'template', 'spec', 'containers'))
+                      if container.get('name') == role]
+        if len(containers) != 1:
+            errors.append(f'GCP {role} Redis: must render exactly one application container in the Redis namespace')
+            continue
+        container = containers[0]
+        if _container_value(container, variable, namespace, objects) != expected_url:
+            errors.append(f'GCP {role} Redis: must reference the generated Redis Service and port without an unresolved Secret override')
+        if role == 'ui' and _container_value(container, 'SPRING_SESSION_STORE_TYPE', namespace, objects) != 'redis':
+            errors.append('GCP ui session: must use Redis when sharing the chart-managed Redis')
+    return errors
+
+
 def check_documents(documents, environment=None):
     errors = []
     objects = [document for document in documents if document is not None]
@@ -49,6 +140,8 @@ def check_documents(documents, environment=None):
         walk(document, path)
         if document.get('kind') == 'ConfigMap':
             string_map(document.get('data'), f'{path}.data')
+    if environment == 'gcp':
+        errors.extend(check_gcp_internal_redis(objects))
     return errors
 
 
@@ -66,7 +159,7 @@ def main():
     if errors:
         print('\n'.join(f'ERROR: {error}' for error in errors), file=sys.stderr)
         return 1
-    print('Rendered annotation and ConfigMap types passed; server validation and runtime remain unverified.')
+    print('Rendered type and applicable Redis wiring checks passed; server validation and runtime remain unverified.')
     return 0
 
 

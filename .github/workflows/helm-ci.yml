@@ -72,18 +72,39 @@ jobs:
           done
           echo 'Structure checks passed using synthetic fixtures. This is not a deployment-readiness result.' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Validate, lint and render GCP DR values
+        shell: bash
+        run: |
+          values=(
+            -f environments/gcp/values-dr.yaml
+            -f src/app/chart/versions.yaml
+          )
+          python ci/validate_cd.py --environment gcp --mode values "${values[@]}"
+          helm lint ./src/app/chart --with-subcharts "${values[@]}"
+          # These names are CI-only placeholders, not a GCP deployment decision.
+          helm template cd-gcp-values ./src/app/chart --namespace cd-gcp-values \
+            "${values[@]}" > "$RUNNER_TEMP/retail-gcp-values.yaml"
+          python ci/check_rendered.py "$RUNNER_TEMP/retail-gcp-values.yaml" --environment gcp
+          echo 'gcp: offline values and rendering passed. Argo CD Application, image publication, target access and runtime behavior remain unverified.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Validate configured or explicitly requested deployment inputs
         shell: bash
         env:
           REQUESTED_ENVIRONMENT: ${{ inputs.deployment_environment || 'structure' }}
         run: |
           for cloud in aws gcp; do
-            if [[ "$REQUESTED_ENVIRONMENT" == "$cloud" || -e "environments/$cloud/values.yaml" || -e "applications/$cloud.yaml" ]]; then
+            values_file="environments/$cloud/values.yaml"
+            if [[ "$cloud" == "gcp" ]]; then
+              values_file="environments/gcp/values-dr.yaml"
+            fi
+            # GCP values are always checked above; full GCP inputs require an
+            # Application or an explicit request. Preserve the AWS conditions.
+            if [[ "$REQUESTED_ENVIRONMENT" == "$cloud" || -e "applications/$cloud.yaml" || ( "$cloud" == "aws" && -e "$values_file" ) ]]; then
               python ci/validate_cd.py --environment "$cloud" --mode deployment \
-                -f "environments/$cloud/values.yaml" \
+                -f "$values_file" \
                 -f src/app/chart/versions.yaml \
                 --application "applications/$cloud.yaml"
-              CLOUD="$cloud" python - <<'PY'
+              CLOUD="$cloud" VALUES_FILE="$values_file" python - <<'PY'
           import os
           import subprocess
           from pathlib import Path
@@ -92,7 +113,7 @@ jobs:
           cloud = os.environ['CLOUD']
           app = yaml.safe_load(Path(f'applications/{cloud}.yaml').read_text())
           spec = app['spec']
-          values = ['-f', f'environments/{cloud}/values.yaml', '-f', 'src/app/chart/versions.yaml']
+          values = ['-f', os.environ['VALUES_FILE'], '-f', 'src/app/chart/versions.yaml']
           subprocess.run(['helm', 'lint', './src/app/chart', '--with-subcharts', *values], check=True)
           output = Path(os.environ['RUNNER_TEMP']) / f'retail-{cloud}-deployment-inputs.yaml'
           with output.open('w') as stream:
@@ -103,6 +124,9 @@ jobs:
           subprocess.run(['python', 'ci/check_rendered.py', str(output), '--environment', cloud], check=True)
           PY
               echo "$cloud: offline deployment inputs and rendering passed. Image publication, target access and runtime behavior remain unverified." >> "$GITHUB_STEP_SUMMARY"
+            elif [[ "$cloud" == "gcp" ]]; then
+              echo '::notice::gcp: Application NOT CONFIGURED (applications/gcp.yaml is absent); DR values were checked separately. Runtime remains unverified.'
+              echo 'gcp: Application NOT CONFIGURED (applications/gcp.yaml is absent); DR values were checked separately. Runtime remains unverified.' >> "$GITHUB_STEP_SUMMARY"
             else
               echo "::notice::$cloud deployment inputs are not configured; only structure was checked."
               echo "$cloud: NOT CONFIGURED (environments/$cloud/values.yaml and applications/$cloud.yaml are absent)." >> "$GITHUB_STEP_SUMMARY"

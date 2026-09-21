@@ -46,15 +46,28 @@ service:
 
 resources:
   limits:
-    memory: 512Mi
+    memory: 768Mi
   requests:
-    cpu: 64m
-    memory: 256Mi
+    cpu: 250m
+    memory: 512Mi
 
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 10
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+      
   targetCPUUtilizationPercentage: 70
 
 nodeSelector: {}
@@ -97,6 +110,7 @@ app:
     #checkout: http://checkout:80
     #recommendations: http://recommendations:80
   session:
+    type: auto
     redis:
       endpoint: ""
       secretName: ""
