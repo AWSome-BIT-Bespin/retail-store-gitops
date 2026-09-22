@@ -1,0 +1,193 @@
+schemaVersion: '2.2'
+description: >-
+  Initial Argo CD installation on the fixed AWS EKS cluster.
+  No upgrades, application adoption, or arbitrary command inputs.
+mainSteps:
+  - action: aws:runShellScript
+    name: installArgoCd
+    inputs:
+      timeoutSeconds: '1800'
+      runCommand:
+        - |
+          exec /usr/bin/env -i \
+            PATH=/usr/local/bin:/usr/bin:/bin \
+            AWS_REGION=ap-northeast-2 \
+            AWS_DEFAULT_REGION=ap-northeast-2 \
+            AWS_CONFIG_FILE=/dev/null \
+            AWS_SHARED_CREDENTIALS_FILE=/dev/null \
+            AWS_PAGER= \
+            /usr/bin/bash --noprofile --norc <<'ARGO_BOOTSTRAP'
+          set -Eeuo pipefail
+          umask 077
+
+          fail() {
+            printf 'ERROR: %s\n' "$1" >&2
+            exit 1
+          }
+
+          trap 'printf "Bootstrap failed at line %s. No automatic cluster cleanup.\n" "$LINENO" >&2' ERR
+
+          [[ "$EUID" -eq 0 ]] || fail "Run through SSM Run Command."
+          [[ "$(uname -m)" == "x86_64" ]] || fail "Unexpected CPU architecture."
+
+          for ArgoTool in aws kubectl curl tar sha256sum mktemp flock timeout mkdir chmod rm; do
+            command -v "$ArgoTool" >/dev/null ||
+              fail "Required tool is missing: $ArgoTool"
+          done
+
+          readonly ArgoRegion="ap-northeast-2"
+          readonly ArgoAccount="350606136784"
+          readonly ArgoInstance="i-036f956a4503b0020"
+          readonly ArgoCluster="retail-infra-eks"
+          readonly ArgoVpc="vpc-0c70528b6040bcd14"
+          readonly ArgoContext="arn:aws:eks:$ArgoRegion:$ArgoAccount:cluster/$ArgoCluster"
+
+          mkdir -p /run/retail-argocd-bootstrap
+          chmod 700 /run/retail-argocd-bootstrap
+          exec 9>/run/retail-argocd-bootstrap/install.lock
+          flock -n 9 || fail "Another bootstrap is running."
+
+          ArgoWork="$(mktemp -d /tmp/retail-argocd-bootstrap.XXXXXXXX)"
+          [[ "$ArgoWork" =~ ^/tmp/retail-argocd-bootstrap\.[[:alnum:]]{8}$ ]] ||
+            fail "Unexpected temporary directory."
+          readonly ArgoWork
+          trap 'rm -rf -- "$ArgoWork"' EXIT
+
+          export HELM_CACHE_HOME="$ArgoWork/helm-cache"
+          export HELM_CONFIG_HOME="$ArgoWork/helm-config"
+          export HELM_DATA_HOME="$ArgoWork/helm-data"
+
+          argo_aws() {
+            /usr/bin/aws \
+              --region "$ArgoRegion" \
+              --no-cli-pager \
+              --cli-connect-timeout 10 \
+              --cli-read-timeout 30 \
+              "$@"
+          }
+
+          argo_kubectl() {
+            /usr/local/bin/kubectl \
+              --kubeconfig "$ArgoWork/kubeconfig" \
+              --context "$ArgoContext" \
+              --cache-dir "$ArgoWork/kube-cache" \
+              --request-timeout=20s \
+              "$@"
+          }
+
+          download() {
+            curl --fail --silent --show-error --location \
+              --proto '=https' --proto-redir '=https' \
+              --connect-timeout 10 --max-time 120 --retry 1 \
+              --output "$2" "$1"
+          }
+
+          verify_sha256() {
+            printf '%s  %s\n' "$1" "$2" |
+              sha256sum --check --status ||
+              fail "Artifact checksum mismatch."
+          }
+
+          ArgoCaller="$(argo_aws sts get-caller-identity --query Arn --output text)"
+          [[ "$ArgoCaller" == "arn:aws:sts::$ArgoAccount:assumed-role/retail-bastion-role/$ArgoInstance" ]] ||
+            fail "Unexpected AWS identity or Bastion."
+
+          ArgoClusterInfo="$(argo_aws eks describe-cluster \
+            --name "$ArgoCluster" \
+            --query 'cluster.[status,version,resourcesVpcConfig.vpcId,to_string(resourcesVpcConfig.endpointPublicAccess),to_string(resourcesVpcConfig.endpointPrivateAccess)]' \
+            --output text)"
+          read -r ArgoStatus ArgoVersion ArgoActualVpc ArgoPublic ArgoPrivate <<< "$ArgoClusterInfo"
+
+          [[ "$ArgoStatus" == "ACTIVE" &&
+             "$ArgoVersion" == "1.36" &&
+             "$ArgoActualVpc" == "$ArgoVpc" &&
+             "$ArgoPublic" == "false" &&
+             "$ArgoPrivate" == "true" ]] ||
+            fail "Unexpected EKS status, version, VPC, or endpoint settings."
+
+          argo_aws eks update-kubeconfig \
+            --name "$ArgoCluster" \
+            --alias "$ArgoContext" \
+            --kubeconfig "$ArgoWork/kubeconfig" >/dev/null
+
+          ArgoExisting="$(argo_kubectl get \
+            namespace/argocd \
+            customresourcedefinition/applications.argoproj.io \
+            customresourcedefinition/appprojects.argoproj.io \
+            customresourcedefinition/applicationsets.argoproj.io \
+            --ignore-not-found -o name)"
+          [[ -z "$ArgoExisting" ]] ||
+            fail "Existing Argo CD namespace or CRDs found."
+
+          ArgoExisting="$(argo_kubectl get deployments,statefulsets,daemonsets \
+            --all-namespaces \
+            --selector=app.kubernetes.io/part-of=argocd \
+            -o name)"
+          [[ -z "$ArgoExisting" ]] ||
+            fail "Existing Argo CD workloads found."
+
+          ArgoExisting="$(argo_kubectl get clusterroles,clusterrolebindings \
+            --selector=app.kubernetes.io/part-of=argocd \
+            -o name)"
+          [[ -z "$ArgoExisting" ]] ||
+            fail "Existing Argo CD cluster RBAC found."
+
+          download \
+            "https://get.helm.sh/helm-v4.2.3-linux-amd64.tar.gz" \
+            "$ArgoWork/helm.tar.gz"
+          verify_sha256 \
+            "e9b88b4ee95b18c706839c28d3a0220e5bc470e9cd9262410c90793c45ff8b7c" \
+            "$ArgoWork/helm.tar.gz"
+
+          tar -xzf "$ArgoWork/helm.tar.gz" \
+            -C "$ArgoWork" linux-amd64/helm
+          readonly ArgoHelm="$ArgoWork/linux-amd64/helm"
+
+          [[ "$("$ArgoHelm" version --short)" == v4.2.3+* ]] ||
+            fail "Unexpected Helm version."
+
+          ArgoExisting="$(timeout 60s "$ArgoHelm" list \
+            --all-namespaces \
+            --filter '^argocd$' \
+            --short \
+            --kubeconfig "$ArgoWork/kubeconfig" \
+            --kube-context "$ArgoContext")"
+          [[ -z "$ArgoExisting" ]] ||
+            fail "Existing argocd Helm release found."
+
+          download \
+            "https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.9.2/argo-cd-10.9.2.tgz" \
+            "$ArgoWork/argo-cd.tgz"
+          verify_sha256 \
+            "970ced346a0ddc3e475a7ff780e9b9c2fdebc07d9a367d2edb6ef4f49832c24a" \
+            "$ArgoWork/argo-cd.tgz"
+
+          # Atomic create: stop if another installer created the namespace.
+          argo_kubectl create namespace argocd
+
+          # Fixed snapshot of bootstrap/argocd/values-aws.yaml.
+          # Keep these settings aligned when updating this document.
+          "$ArgoHelm" install argocd "$ArgoWork/argo-cd.tgz" \
+            --namespace argocd \
+            --kubeconfig "$ArgoWork/kubeconfig" \
+            --kube-context "$ArgoContext" \
+            --set server.service.type=ClusterIP \
+            --set server.ingress.enabled=false \
+            --set redis-ha.enabled=false \
+            --wait=watcher \
+            --wait-for-jobs \
+            --timeout 10m \
+            --hide-notes
+
+          ArgoServiceType="$(argo_kubectl --namespace argocd \
+            get service argocd-server -o jsonpath='{.spec.type}')"
+          [[ "$ArgoServiceType" == "ClusterIP" ]] ||
+            fail "Unexpected Argo CD server service type."
+
+          ArgoIngress="$(argo_kubectl --namespace argocd get ingress -o name)"
+          [[ -z "$ArgoIngress" ]] ||
+            fail "Unexpected Ingress in argocd namespace."
+
+          argo_kubectl --namespace argocd get deployments,statefulsets,pods
+          printf 'ARGOCD_BOOTSTRAP_SUCCESS\n'
+          ARGO_BOOTSTRAP
