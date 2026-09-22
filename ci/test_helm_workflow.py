@@ -232,7 +232,7 @@ class HelmWorkflowTests(unittest.TestCase):
         self.assertIn("unittest discover -s ci -p 'test_*.py'", self.step("Test CD input validation")["run"])
         bootstrap = self.workflow["jobs"]["argocd-bootstrap-validate"]
         steps = {step["name"]: step for step in bootstrap["steps"]}
-        self.assertIn("--version 10.2.1", steps["Pull pinned Argo CD chart"]["run"])
+        self.assertIn("--version 10.9.2", steps["Pull pinned Argo CD chart"]["run"])
         self.assertIn("./bootstrap/argocd/values-aws.yaml", steps["Lint Argo CD bootstrap"]["run"])
 
     def test_workflow_does_not_add_deployment_commands_or_cloud_authentication(self):

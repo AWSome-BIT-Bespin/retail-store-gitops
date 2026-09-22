@@ -155,7 +155,7 @@ jobs:
       - name: Pull pinned Argo CD chart
         run: |
           helm pull argo/argo-cd \
-            --version 10.2.1 \
+            --version 10.9.2 \
             --untar \
             --untardir "$RUNNER_TEMP"
 
