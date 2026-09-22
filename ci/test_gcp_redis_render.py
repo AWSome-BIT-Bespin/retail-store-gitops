@@ -5,11 +5,12 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import yaml
 
 from check_rendered import check_documents
-from validate_cd import ValidationErrors, load_values_stack
+from validate_cd import ValidationErrors, load_yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,24 +21,33 @@ class GcpRedisRenderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         errors = ValidationErrors()
-        values, _ = load_values_stack(ROOT, [
+        overlays = [load_yaml(path, errors) for path in (
+            ROOT / "src/app/chart/values.yaml",
             ROOT / "environments/gcp/values.yaml",
             ROOT / "src/app/chart/versions.yaml",
-        ], errors)
+        )]
         if errors.items:
             raise AssertionError("GCP values could not be loaded")
         cls.baseline = []
         # Like the AWS wiring tests, render source child charts before any
         # umbrella dependency build. The release/namespace are test-only names.
-        for service in ("checkout", "ui"):
-            result = subprocess.run([
-                "helm", "template", "gcp-redis-test", str(ROOT / "src" / service / "chart"),
-                "--namespace", "gcp-redis-test", "--skip-tests", "-f", "-",
-            ], input=yaml.safe_dump(values[service]), capture_output=True,
-                text=True, encoding="utf-8", timeout=30)
-            if result.returncode:
-                raise AssertionError(f"GCP {service} rendering failed (exit {result.returncode})")
-            cls.baseline.extend(doc for doc in yaml.safe_load_all(result.stdout) if doc)
+        # Keep raw overlays in order: pre-coalescing consumes null deletions,
+        # allowing Helm to restore the child chart's AWS defaults on a second merge.
+        with TemporaryDirectory(prefix="gcp-redis-render-") as temporary_directory:
+            for service in ("checkout", "ui"):
+                command = [
+                    "helm", "template", "gcp-redis-test", str(ROOT / "src" / service / "chart"),
+                    "--namespace", "gcp-redis-test", "--skip-tests",
+                ]
+                for index, overlay in enumerate(overlays):
+                    values_path = Path(temporary_directory) / f"{service}-{index}.yaml"
+                    values_path.write_text(yaml.safe_dump(overlay.get(service, {})), encoding="utf-8")
+                    command.extend(["-f", str(values_path)])
+                result = subprocess.run(command, capture_output=True,
+                    text=True, encoding="utf-8", timeout=30)
+                if result.returncode:
+                    raise AssertionError(f"GCP {service} rendering failed (exit {result.returncode})")
+                cls.baseline.extend(doc for doc in yaml.safe_load_all(result.stdout) if doc)
 
     def setUp(self):
         self.documents = copy.deepcopy(self.baseline)
