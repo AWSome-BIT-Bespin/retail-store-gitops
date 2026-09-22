@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           values=(
-            -f environments/gcp/values-dr.yaml
+            -f environments/gcp/values.yaml
             -f src/app/chart/versions.yaml
           )
           python ci/validate_cd.py --environment gcp --mode values "${values[@]}"
@@ -95,7 +95,7 @@ jobs:
           for cloud in aws gcp; do
             values_file="environments/$cloud/values.yaml"
             if [[ "$cloud" == "gcp" ]]; then
-              values_file="environments/gcp/values-dr.yaml"
+              values_file="environments/gcp/values.yaml"
             fi
             # GCP values are always checked above; full GCP inputs require an
             # Application or an explicit request. Preserve the AWS conditions.

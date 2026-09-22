@@ -21,7 +21,7 @@ class GcpRedisRenderTests(unittest.TestCase):
     def setUpClass(cls):
         errors = ValidationErrors()
         values, _ = load_values_stack(ROOT, [
-            ROOT / "environments/gcp/values-dr.yaml",
+            ROOT / "environments/gcp/values.yaml",
             ROOT / "src/app/chart/versions.yaml",
         ], errors)
         if errors.items:

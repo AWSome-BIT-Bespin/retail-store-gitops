@@ -20,7 +20,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/helm-ci.yml"
-GCP_VALUES = "environments/gcp/values-dr.yaml"
+GCP_VALUES = "environments/gcp/values.yaml"
 VERSIONS = "src/app/chart/versions.yaml"
 GCP_STEP = "Validate, lint and render GCP DR values"
 DEPLOYMENT_STEP = "Validate configured or explicitly requested deployment inputs"
@@ -140,7 +140,7 @@ class HelmWorkflowTests(unittest.TestCase):
         self.assertIn("aws", commands[0])
         self.assertIn("gcp: Application NOT CONFIGURED", summary)
         self.assertNotIn("only structure", summary)
-        self.assertNotIn("environments/gcp/values.yaml", summary)
+        self.assertNotIn("environments/gcp/values-dr.yaml", summary)
         self.assertIn("unverified", summary)
 
     def test_explicit_gcp_request_still_requires_full_inputs_and_propagates_failure(self):
