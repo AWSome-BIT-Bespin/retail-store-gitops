@@ -22,7 +22,7 @@ REGISTRIES = {
 }
 ENVIRONMENT_VALUES = {
     "aws": "environments/aws/values.yaml",
-    "gcp": "environments/gcp/values-dr.yaml",
+    "gcp": "environments/gcp/values.yaml",
 }
 VERSIONS_FILE = "src/app/chart/versions.yaml"
 # Project-specific AWS contract, reviewed against Infra terraform-moduels

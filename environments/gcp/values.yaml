@@ -151,19 +151,20 @@ ui:
         secretName: ""
   ingress:
     # AWS ALB Ingress 대신 GKE LoadBalancer Service를 사용합니다.
-    enabled: false
+    enabled: true
     className: ""
     annotations:
+      kubernetes.io/ingress.class: "gce"
       alb.ingress.kubernetes.io/load-balancer-name: null
       alb.ingress.kubernetes.io/scheme: null
       alb.ingress.kubernetes.io/target-type: null
       alb.ingress.kubernetes.io/healthcheck-path: null
   service:
     # 공통 기본값(ClusterIP) 대신 GKE LoadBalancer Service를 사용합니다.
-    type: LoadBalancer
+    type: ClusterIP
     port: 80
     annotations:
-      cloud.google.com/l4-rbs: "enabled"
+      cloud.google.com/neg: '{"ingress": true}'
   # AWS와 동일한 애플리케이션 ServiceAccount 이름을 유지합니다.
   serviceAccount:
     create: true

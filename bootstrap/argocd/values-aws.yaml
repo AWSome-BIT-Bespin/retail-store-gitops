@@ -1,6 +1,6 @@
 # Pinned install contract:
-#   Helm chart: argo-cd 10.2.1
-#   Argo CD: v3.4.5
+#   Helm chart: argo-cd 10.9.2
+#   Argo CD: v3.5.3
 # This file prepares only the initial AWS bootstrap installation.
 server:
   service:

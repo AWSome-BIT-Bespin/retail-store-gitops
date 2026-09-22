@@ -70,7 +70,7 @@ argocd --server $argoServer proj get $application.spec.project
 
 EKS/GKE 정체성, Argo에 등록된 destination 이름/주소, namespace, 기존 releaseName과 Application 소유권을 대조한다. 기존 앱이 다른 이름으로 등록되어 있으면 새 Application으로 중복 관리하지 말고 해당 정의를 이어받는 방법을 확인한다. releaseName이나 Application 이름 변경은 selector·추적 라벨에 영향을 줄 수 있으므로 실제 diff에서 확인한다.
 
-Argo가 없다면 Kubernetes/CD 담당이 기존 `bootstrap/argocd/values-aws.yaml`, chart 10.2.1 검증 결과와 실제 설치 요구사항을 대조해 설치한다. 설치 버전·namespace·접근 방식이 확정되기 전에는 이 문서에서 임의의 새 설치를 실행하지 않는다. Application에는 기존 AppProject의 source/destination 권한과 GitOps repo 읽기 권한, 실제 클러스터 등록이 필요하다.
+Argo가 없다면 Kubernetes/CD 담당이 기존 `bootstrap/argocd/values-aws.yaml`, chart 10.9.2(Argo CD v3.5.3)의 로컬 검증 결과와 실제 설치 요구사항을 대조해 설치한다. 설치 버전·namespace·접근 방식이 확정되기 전에는 이 문서에서 임의의 새 설치를 실행하지 않는다. Application에는 기존 AppProject의 source/destination 권한과 GitOps repo 읽기 권한, 실제 클러스터 등록이 필요하다.
 
 대상 namespace의 Secret 이름과 키 이름을 확인한다. 다음 명령은 완료한 values에서 Orders Secret 참조를 읽고 Secret의 데이터 키 이름만 출력한다.
 

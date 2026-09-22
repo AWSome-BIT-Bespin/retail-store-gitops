@@ -1,0 +1,245 @@
+name: Install AWS Argo CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Argo CD 신규 설치: INSTALL_ARGOCD 입력"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: argocd-bootstrap-aws-retail-infra-eks
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install Argo CD through SSM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    permissions:
+      id-token: write
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      AWS_REGION: ap-northeast-2
+      AWS_PAGER: ""
+      AWS_CLI_AUTO_PROMPT: "off"
+      AWS_RETRY_MODE: standard
+      AWS_MAX_ATTEMPTS: "3"
+      ARGO_INSTANCE_ID: i-036f956a4503b0020
+      ARGO_DOCUMENT_NAME: retail-argocd-bootstrap-aws
+      ARGO_DOCUMENT_VERSION: "1"
+      ARGO_DOCUMENT_SHA256: ${{ vars.ARGOCD_BOOTSTRAP_DOCUMENT_SHA256 }}
+
+    steps:
+      - name: Check execution conditions
+        env:
+          ARGO_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REPOSITORY" != "AWSome-BIT-Bespin/retail-store-gitops" ||
+                "$GITHUB_REF" != "refs/heads/main" ||
+                "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]]; then
+            printf '::error::Only manual execution from this repository main branch is allowed.\n'
+            exit 1
+          fi
+
+          if [[ "$ARGO_CONFIRMATION" != "INSTALL_ARGOCD" ]]; then
+            printf '::error::Enter INSTALL_ARGOCD to confirm installation.\n'
+            exit 1
+          fi
+
+          if [[ ! "$ARGO_DOCUMENT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            printf '::error::The registered SSM document SHA-256 is missing or invalid.\n'
+            exit 1
+          fi
+
+          for ArgoTool in aws python3; do
+            command -v "$ArgoTool" >/dev/null || {
+              printf '::error::Required tool is missing: %s\n' "$ArgoTool"
+              exit 1
+            }
+          done
+
+      - name: Authenticate to AWS through OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: ap-northeast-2
+          role-to-assume: arn:aws:iam::350606136784:role/retail-github-actions-argocd-bootstrap
+          allowed-account-ids: "350606136784"
+          audience: sts.amazonaws.com
+          role-session-name: argocd-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 3600
+          unset-current-credentials: true
+          output-env-credentials: true
+          translate-env-variables: false
+          retry-max-attempts: 3
+          action-timeout-s: 120
+
+      - name: Request the fixed SSM installation
+        id: ssm
+        run: |
+          set -euo pipefail
+
+          # Do not automatically resend an installation request
+          # when the response is uncertain.
+          if ! ArgoCommandId="$(AWS_MAX_ATTEMPTS=1 aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$ARGO_INSTANCE_ID" \
+            --document-name "$ARGO_DOCUMENT_NAME" \
+            --document-version "$ARGO_DOCUMENT_VERSION" \
+            --document-hash "$ARGO_DOCUMENT_SHA256" \
+            --document-hash-type Sha256 \
+            --timeout-seconds 120 \
+            --max-concurrency "1" \
+            --max-errors "0" \
+            --comment "ArgoCD bootstrap ${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}" \
+            --query 'Command.CommandId' \
+            --output text \
+            --cli-connect-timeout 10 \
+            --cli-read-timeout 30 \
+            --no-cli-pager)"; then
+            printf '::error::The request could not be confirmed. Inspect SSM Run Command before retrying.\n'
+            exit 1
+          fi
+
+          if [[ ! "$ArgoCommandId" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            printf '::error::Unexpected command ID. Inspect SSM before retrying.\n'
+            exit 1
+          fi
+
+          printf 'command_id=%s\n' "$ArgoCommandId" >> "$GITHUB_OUTPUT"
+          printf 'SSM command ID: %s\n' "$ArgoCommandId"
+
+          {
+            printf '## AWS Argo CD bootstrap\n\n'
+            printf 'SSM command ID: `%s`\n\n' "$ArgoCommandId"
+            printf 'Instance: `%s`\n\n' "$ARGO_INSTANCE_ID"
+            printf 'Document: `%s`, version `%s`\n\n' \
+              "$ARGO_DOCUMENT_NAME" "$ARGO_DOCUMENT_VERSION"
+            printf 'Cancelling this workflow does not automatically cancel the SSM command.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for the installation result
+        env:
+          ARGO_COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import time
+          from pathlib import Path
+
+          def fail(message):
+              print(f"::error::{message}", flush=True)
+              raise SystemExit(1)
+
+          command = [
+              "aws", "ssm", "get-command-invocation",
+              "--region", os.environ["AWS_REGION"],
+              "--command-id", os.environ["ARGO_COMMAND_ID"],
+              "--instance-id", os.environ["ARGO_INSTANCE_ID"],
+              "--plugin-name", "installArgoCd",
+              "--output", "json",
+              "--cli-connect-timeout", "10",
+              "--cli-read-timeout", "20",
+              "--no-cli-pager",
+          ]
+
+          started = time.monotonic()
+          deadline = started + 2100
+          previous_status = None
+          waiting = {"Pending", "InProgress", "Delayed", "Cancelling"}
+          terminal = {"Success", "Failed", "Cancelled", "TimedOut"}
+
+          while time.monotonic() < deadline:
+              try:
+                  result = subprocess.run(
+                      command,
+                      capture_output=True,
+                      text=True,
+                      timeout=120,
+                      check=False,
+                  )
+              except (OSError, subprocess.TimeoutExpired):
+                  fail(
+                      "Could not read SSM status. The command may still be "
+                      "running; inspect its recorded ID before retrying."
+                  )
+
+              if result.returncode != 0:
+                  # A newly submitted invocation may not be visible yet.
+                  if (
+                      "InvocationDoesNotExist" in result.stderr
+                      and time.monotonic() - started < 300
+                  ):
+                      time.sleep(10)
+                      continue
+                  fail(
+                      "SSM status lookup failed. Inspect the recorded "
+                      "command ID before retrying."
+                  )
+
+              try:
+                  invocation = json.loads(result.stdout)
+              except json.JSONDecodeError:
+                  fail("SSM returned an unreadable result.")
+
+              if not isinstance(invocation, dict):
+                  fail("SSM returned an unexpected result.")
+
+              status = invocation.get("Status")
+              if status not in waiting | terminal:
+                  fail("SSM returned an unexpected execution status.")
+
+              if status != previous_status:
+                  print(f"SSM status: {status}", flush=True)
+                  previous_status = status
+
+              if status in waiting:
+                  time.sleep(10)
+                  continue
+
+              if status != "Success":
+                  fail(f"SSM installation ended with status: {status}.")
+
+              output = invocation.get("StandardOutputContent") or ""
+              verified = (
+                  invocation.get("ResponseCode") == 0
+                  and invocation.get("DocumentName")
+                      == os.environ["ARGO_DOCUMENT_NAME"]
+                  and invocation.get("DocumentVersion")
+                      == os.environ["ARGO_DOCUMENT_VERSION"]
+                  and "ARGOCD_BOOTSTRAP_SUCCESS" in output.splitlines()
+              )
+
+              if not verified:
+                  fail(
+                      "SSM reported success, but installation completion "
+                      "could not be verified. Inspect the recorded command."
+                  )
+
+              print("Argo CD bootstrap completed successfully.", flush=True)
+              with Path(os.environ["GITHUB_STEP_SUMMARY"]).open(
+                  "a", encoding="utf-8"
+              ) as summary:
+                  summary.write(
+                      "\nResult: Argo CD bootstrap completed. "
+                      "No retail Application was connected or synced.\n"
+                  )
+              raise SystemExit(0)
+
+          fail(
+              "Stopped waiting for SSM. The command may still be running; "
+              "inspect its recorded ID before retrying."
+          )
+          PY

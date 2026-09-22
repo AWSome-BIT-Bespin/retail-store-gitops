@@ -26,6 +26,7 @@ spec:
       {{- end }}
       labels:
         {{- include "carts.selectorLabels" . | nindent 8 }}
+        workload: app
     spec:
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:

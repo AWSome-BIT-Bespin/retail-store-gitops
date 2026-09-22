@@ -37,6 +37,8 @@ cart:
     create: true
     name: carts-dynamo-sa
     annotations: {}
+  nodeSelector:
+    workload: app
 
 catalog:
   app:
@@ -54,7 +56,8 @@ catalog:
     serverHost: 13.124.11.223/13.209.172.35
     appName: catalog
     okind: catalog
-
+  nodeSelector:
+    workload: app
 
 checkout:
   app:
@@ -81,6 +84,8 @@ checkout:
     create: true
     name: checkout-sa
     annotations: {}
+  nodeSelector:
+    workload: app
 
 
 orders:
@@ -104,6 +109,8 @@ orders:
     create: true
     name: orders-sa
     annotations: {}
+  nodeSelector:
+    workload: app
 
   postgresql:
     create: false
@@ -132,3 +139,5 @@ ui:
     create: true
     name: ui-sa
     annotations: {}
+  nodeSelector:
+    workload: app

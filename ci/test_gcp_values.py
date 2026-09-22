@@ -12,7 +12,7 @@ class GcpValuesTests(ValidatorTestCase):
     def setUp(self):
         super().setUp()
         self.environment = "gcp"
-        self.values_path = self.root / "environments/gcp/values-dr.yaml"
+        self.values_path = self.root / "environments/gcp/values.yaml"
         self.application_path = self.root / "applications/gcp.yaml"
         self.values = self.valid_values("gcp")
         self.values["checkout"]["redis"] = {
@@ -65,7 +65,7 @@ class GcpValuesTests(ValidatorTestCase):
         self.assertIn("--application: is required", stderr)
 
     def test_values_mode_requires_current_path_and_exact_order(self):
-        old_path = self.root / "environments/gcp/values.yaml"
+        old_path = self.root / "environments/gcp/values-dr.yaml"
         self.write_yaml(old_path, self.values)
         for paths in ([old_path, self.versions_path], [self.versions_path, self.values_path],
                       [self.values_path], [self.values_path, self.versions_path, self.values_path]):
@@ -75,7 +75,7 @@ class GcpValuesTests(ValidatorTestCase):
                 self.assertIn("-f input stack", stderr)
 
     def test_application_cannot_keep_the_old_gcp_path(self):
-        self.application["spec"]["source"]["helm"]["valueFiles"][0] = "../../../environments/gcp/values.yaml"
+        self.application["spec"]["source"]["helm"]["valueFiles"][0] = "../../../environments/gcp/values-dr.yaml"
         self.persist()
         code, _, stderr = self.invoke()
         self.assertEqual(1, code)
@@ -159,7 +159,7 @@ class ActualGcpValuesTests(unittest.TestCase):
         with redirect_stdout(stdout), redirect_stderr(stderr):
             code = main([
                 "--environment", "gcp", "--mode", "values",
-                "-f", str(REPO_ROOT / "environments/gcp/values-dr.yaml"),
+                "-f", str(REPO_ROOT / "environments/gcp/values.yaml"),
                 "-f", str(REPO_ROOT / "src/app/chart/versions.yaml"),
             ], repo_root=REPO_ROOT)
         self.assertEqual(0, code, stderr.getvalue())
