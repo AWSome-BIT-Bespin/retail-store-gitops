@@ -13,6 +13,16 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+networkPolicy:
+  # Ingress만 제한합니다. AWS 환경 values에서 이 앱의 정책을 활성화합니다.
+  enabled: false
+  # 빈 목록은 모든 출발지의 http 포트(TCP 8080) 접근을 허용합니다.
+  # 실제 ALB 출발지 서브넷 CIDR을 지정하면 접근 범위를 좁힙니다.
+  ingressCidrs: []
+  monitoring:
+    # 지정한 네임스페이스의 모든 Pod에 http 포트를 허용합니다. 빈 값이면 생략합니다.
+    namespace: ""
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true

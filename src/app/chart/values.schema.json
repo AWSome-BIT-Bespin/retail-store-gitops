@@ -10,6 +10,55 @@
   },
   "additionalProperties": true,
   "$defs": {
+    "networkPolicyMonitoring": {
+      "type": "object",
+      "required": ["namespace"],
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      }
+    },
+    "networkPolicyClient": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 63 },
+        "releaseName": { "type": "string", "maxLength": 53 }
+      }
+    },
+    "backendNetworkPolicy": {
+      "type": "object",
+      "required": ["enabled", "allowedClients", "monitoring"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowedClients": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/networkPolicyClient" }
+        },
+        "monitoring": { "$ref": "#/$defs/networkPolicyMonitoring" }
+      }
+    },
+    "uiNetworkPolicy": {
+      "type": "object",
+      "required": ["enabled", "ingressCidrs", "monitoring"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingressCidrs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "monitoring": { "$ref": "#/$defs/networkPolicyMonitoring" }
+      }
+    },
     "stringMap": {
       "type": "object",
       "additionalProperties": { "type": ["string", "null"] }
@@ -110,6 +159,7 @@
         {
           "type": "object",
           "properties": {
+            "networkPolicy": { "$ref": "#/$defs/backendNetworkPolicy" },
             "app": {
               "type": "object",
               "properties": {
@@ -152,6 +202,7 @@
         {
           "type": "object",
           "properties": {
+            "networkPolicy": { "$ref": "#/$defs/backendNetworkPolicy" },
             "app": {
               "type": "object",
               "properties": {
@@ -209,6 +260,7 @@
         {
           "type": "object",
           "properties": {
+            "networkPolicy": { "$ref": "#/$defs/backendNetworkPolicy" },
             "app": {
               "type": "object",
               "properties": {
@@ -244,6 +296,7 @@
         {
           "type": "object",
           "properties": {
+            "networkPolicy": { "$ref": "#/$defs/backendNetworkPolicy" },
             "app": {
               "type": "object",
               "properties": {
@@ -285,6 +338,7 @@
         {
           "type": "object",
           "properties": {
+            "networkPolicy": { "$ref": "#/$defs/uiNetworkPolicy" },
             "app": {
               "type": "object",
               "properties": {

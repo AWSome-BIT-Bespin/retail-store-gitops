@@ -1,0 +1,41 @@
+{{- if .Values.networkPolicy.enabled }}
+# 같은 네임스페이스의 allowedClients와 지정한 모니터링 네임스페이스만 허용합니다.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-catalog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "catalog.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "catalog.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  {{- if or .Values.networkPolicy.allowedClients .Values.networkPolicy.monitoring.namespace }}
+  ingress:
+    - from:
+        {{- range .Values.networkPolicy.allowedClients }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ required "networkPolicy.allowedClients[].name is required" .name | quote }}
+              app.kubernetes.io/instance: {{ default $.Release.Name .releaseName | quote }}
+              app.kubernetes.io/component: service
+              app.kubernetes.io/owner: retail-store-sample
+        {{- end }}
+        {{- with .Values.networkPolicy.monitoring.namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: http
+  {{- else }}
+  ingress: []
+  {{- end }}
+{{- end }}

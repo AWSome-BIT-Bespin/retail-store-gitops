@@ -2,6 +2,7 @@
 /src/app/chart/charts/
 /bootstrap/external-secrets/
 /docs/
+/runbooks/
 
 # 비밀번호가 포함된 로컬 설정
 *.secret.yaml

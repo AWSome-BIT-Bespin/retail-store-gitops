@@ -13,6 +13,20 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+networkPolicy:
+  # Ingress만 제한합니다. AWS 환경 values에서 이 앱의 정책을 활성화합니다.
+  enabled: false
+  # 같은 네임스페이스의 호출 앱 라벨입니다. nameOverride 변경 시 name도 맞춥니다.
+  # releaseName이 비어 있으면 이 차트의 릴리스 이름을 사용합니다.
+  allowedClients:
+    - name: ui
+      releaseName: ""
+    - name: checkout
+      releaseName: ""
+  monitoring:
+    # 지정한 네임스페이스의 모든 Pod에 http 포트를 허용합니다. 빈 값이면 생략합니다.
+    namespace: ""
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
