@@ -2,6 +2,17 @@
 #   Helm chart: argo-cd 10.9.2
 #   Argo CD: v3.5.3
 # This file prepares only the initial AWS bootstrap installation.
+# Keep the fixed Helm flags in ssm-install-aws.yaml aligned with these values.
+global:
+  nodeSelector:
+    kubernetes.io/os: linux
+    workload: mgmt
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: mgmt
+      effect: NoSchedule
+
 server:
   service:
     type: ClusterIP
