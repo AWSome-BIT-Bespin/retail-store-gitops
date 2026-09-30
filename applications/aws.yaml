@@ -1,9 +1,9 @@
-# Existing retail-dev release, manually synchronized after diff review.
+# Existing retail-store release, manually synchronized after diff review.
 # No automated sync, pruning or cascading-delete finalizer.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: retail-dev
+  name: retail-store
   namespace: argocd
 spec:
   project: default
@@ -12,7 +12,7 @@ spec:
     targetRevision: main
     path: src/app/chart
     helm:
-      releaseName: retail-dev
+      releaseName: retail-store
       skipTests: true
       valueFiles:
         - ../../../environments/aws/values.yaml
