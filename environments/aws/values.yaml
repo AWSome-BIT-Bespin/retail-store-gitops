@@ -14,10 +14,22 @@ whatapAgent:
     customImageFullName: public.ecr.aws/whatap/kube_mon:1.8.7
     masterAgent:
       enabled: true
+      nodeSelector:
+        workload: mgmt
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: mgmt
+          effect: NoSchedule
     nodeAgent:
       enabled: true
       runtime: containerd
       runtimeSocketPath: /var/run/containerd/containerd.sock
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: mgmt
+          effect: NoSchedule
     gpuMonitoring:
       enabled: false
 
