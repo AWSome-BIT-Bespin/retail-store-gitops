@@ -54,7 +54,7 @@ resources:
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 12
+  maxReplicas: 6
 
   behavior:
     scaleUp:
@@ -67,7 +67,7 @@ autoscaling:
           value: 4
           periodSeconds: 15
       selectPolicy: Max
-      
+
   targetCPUUtilizationPercentage: 70
 
 nodeSelector: {}
